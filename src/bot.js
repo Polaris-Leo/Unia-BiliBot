@@ -5,6 +5,7 @@ import { generateDynamicCard } from './image-generator.js';
 
 const POLL_INTERVAL = 30 * 1000; // 30 seconds
 const retryMap = new Map(); // mid -> Set<dynamicId>
+let isFirstRun = true;
 
 async function checkLiveStatus(user) {
     if (!user.monitorLive || !user.mid) return;
@@ -14,6 +15,16 @@ async function checkLiveStatus(user) {
 
     const isNowLive = liveInfo.live_status === 1;
     const now = Date.now();
+
+    // Handle first run state mismatch
+    if (isFirstRun) {
+        if (user.isLive && !isNowLive) {
+            console.log(`[Startup] ${user.uname} state mismatch: Memory=Live, API=Offline. Silently correcting to Offline.`);
+            user.isLive = false;
+            user.offlineSince = 0;
+            // Don't return, let it fall through to ensure clean state
+        }
+    }
 
     if (isNowLive) {
         // Currently Live
@@ -57,16 +68,19 @@ async function checkLiveStatus(user) {
                 msg = `${liveInfo.uname} 开播啦！【${liveInfo.title}】\nhttps://live.bilibili.com/${liveInfo.room_id}\n[CQ:image,file=${liveInfo.cover_from_user}]`;
             }
             
-            for (const groupId of user.targetGroups) {
-                let groupMsg = msg;
-                if (user.atAllLive) {
-                    groupMsg = `[CQ:at,qq=all]\n${groupMsg}`;
+            if (user.notifyLiveStart !== false) {
+                console.log(`[${new Date().toLocaleString()}] Sending live start notification for ${liveInfo.uname}`);
+                for (const groupId of user.targetGroups) {
+                    let groupMsg = msg;
+                    if (user.atAllLive) {
+                        groupMsg = `[CQ:at,qq=all]\n${groupMsg}`;
+                    }
+                    await napcat.sendGroupMsg(groupId, groupMsg);
                 }
-                await napcat.sendGroupMsg(groupId, groupMsg);
-            }
-            if (user.targetPrivate) {
-                for (const userId of user.targetPrivate) {
-                    await napcat.sendPrivateMsg(userId, msg);
+                if (user.targetPrivate) {
+                    for (const userId of user.targetPrivate) {
+                        await napcat.sendPrivateMsg(userId, msg);
+                    }
                 }
             }
         }
@@ -77,12 +91,13 @@ async function checkLiveStatus(user) {
             if (!user.offlineSince) {
                 // First detection
                 user.offlineSince = now;
-                console.log(`${liveInfo.uname} detected offline, waiting 3 mins...`);
+                console.log(`[${new Date().toLocaleString()}] ${liveInfo.uname} detected offline, waiting 3 mins...`);
             } else {
                 // Already detected offline, check duration
                 const offlineDuration = now - user.offlineSince;
                 if (offlineDuration >= 3 * 60 * 1000) {
                     // Confirmed offline > 3 mins
+                    console.log(`[${new Date().toLocaleString()}] ${liveInfo.uname} confirmed offline.`);
                     user.isLive = false;
                     user.lastLiveEnd = user.offlineSince; // Use the time we first detected offline
                     user.offlineSince = 0;
@@ -92,12 +107,14 @@ async function checkLiveStatus(user) {
                     
                     const msg = `${liveInfo.uname} 下播了。\n本次直播时长：${durationStr}`;
                     
-                    for (const groupId of user.targetGroups) {
-                        await napcat.sendGroupMsg(groupId, msg);
-                    }
-                    if (user.targetPrivate) {
-                        for (const userId of user.targetPrivate) {
-                            await napcat.sendPrivateMsg(userId, msg);
+                    if (user.notifyLiveEnd !== false) {
+                        for (const groupId of user.targetGroups) {
+                            await napcat.sendGroupMsg(groupId, msg);
+                        }
+                        if (user.targetPrivate) {
+                            for (const userId of user.targetPrivate) {
+                                await napcat.sendPrivateMsg(userId, msg);
+                            }
                         }
                     }
                 }
@@ -136,9 +153,44 @@ async function checkDynamics(user) {
     const latestId = latest.id_str;
 
     if (!user.lastDynamicId) {
-        // First run, just save the latest ID
-        user.lastDynamicId = latestId;
-        return;
+        // First run
+        if (user.notifyMissed) {
+            // If notifyMissed is enabled, process the latest dynamic
+            // We treat the latest one as "new"
+            // Note: We only take the latest one to avoid spamming if there are multiple "missed" ones
+            // or we could take all? Let's stick to latest for safety.
+            // Actually, items[0] is the latest.
+            // We need to set lastDynamicId to the one *before* it to trigger the loop?
+            // No, we can just manually push it to newItems and let the loop handle it.
+            // But we need to be careful about setting lastDynamicId.
+            
+            // Let's just pretend lastDynamicId was the one before the latest (if exists)
+            // or just 0.
+            // But if we set it to 0, we might get 12 items.
+            // Let's just push the latest item to newItems and set lastDynamicId to the one before it (or 0)
+            // effectively.
+            
+            // Simpler approach:
+            // Just add the latest item to newItems list directly.
+            // And ensure we don't return early.
+            
+            // But wait, the loop below filters based on lastDynamicId.
+            // So we need to set lastDynamicId to something smaller than latestId.
+            // If items has > 1 element, use items[1].id_str.
+            // If items has 1 element, use 0.
+            
+            if (items.length > 1) {
+                user.lastDynamicId = items[1].id_str;
+            } else {
+                user.lastDynamicId = '0';
+            }
+            // Now the logic below will pick up items[0] (and maybe others if we set it to 0)
+            // If we set it to items[1].id_str, it will pick up items[0].
+        } else {
+            // Default behavior: just save the latest ID and silent
+            user.lastDynamicId = latestId;
+            return;
+        }
     }
 
     if (BigInt(latestId) <= BigInt(user.lastDynamicId)) {
@@ -284,15 +336,43 @@ function formatDuration(ms) {
 
 export async function startBot() {
     console.log('Bot started...');
-    setInterval(async () => {
-        console.log('Checking status...');
-        config.reload(); // Reload config in case it was changed by frontend
+    
+    const runChecks = async () => {
+        const now = new Date().toLocaleString();
+        const statusSummaries = [];
         
         for (const user of config.data.users) {
-            await checkLiveStatus(user);
-            await checkDynamics(user);
+            try {
+                await checkLiveStatus(user);
+                await checkDynamics(user);
+
+                let status = 'Offline';
+                if (user.isLive) {
+                    if (user.offlineSince > 0) {
+                        status = 'Waiting'; // Waiting for 3 mins confirmation
+                    } else {
+                        status = 'Live';
+                    }
+                }
+                statusSummaries.push(`${user.uname || user.mid}(${status})`);
+
+            } catch (error) {
+                console.error(`[${now}] Error checking user ${user.uname || user.mid}:`, error);
+                statusSummaries.push(`${user.uname || user.mid}(Error)`);
+            }
         }
         
+        console.log(`[${now}] Checked: ${statusSummaries.join(', ')}`);
+        
+        // Save state changes (isLive, lastDynamicId, etc.) to disk
         config.save();
-    }, POLL_INTERVAL);
+        
+        if (isFirstRun) isFirstRun = false;
+    };
+
+    // Run immediately on startup
+    await runChecks();
+
+    // Then run on interval
+    setInterval(runChecks, POLL_INTERVAL);
 }

@@ -203,6 +203,49 @@
             background: #eee;
             color: #666;
         }
+
+        /* Toast Notification */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+        .toast {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.3s ease;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 200px;
+            justify-content: center;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .toast.success {
+            background: #52c41a;
+        }
+        .toast.error {
+            background: #ff4d4f;
+        }
+        .toast.info {
+            background: var(--primary-color);
+        }
         .status-success { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
         .status-warning { background: #fffbe6; color: #fa8c16; border: 1px solid #ffe58f; }
         
@@ -373,6 +416,7 @@
     </style>
 </head>
 <body>
+    <div id="toast-container" class="toast-container"></div>
     <div class="container">
         <header>
             <h1>Unia BiliBili Bot</h1>
@@ -465,6 +509,29 @@
     </div>
 
     <script>
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerText = message;
+            
+            container.appendChild(toast);
+            
+            // Trigger reflow
+            toast.offsetHeight;
+            
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    if (toast.parentNode === container) {
+                        container.removeChild(toast);
+                    }
+                }, 300);
+            }, 3000);
+        }
+
         let config = {};
         let pollTimer = null;
         let currentUser = null;
@@ -659,7 +726,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(config)
             });
-            if (showAlert) alert('配置已保存');
+            if (showAlert) showToast('配置已保存', 'success');
         }
 
         function openModal() {
@@ -680,7 +747,7 @@
             const groupsStr = document.getElementById('modalGroups').value;
             const privateStr = document.getElementById('modalPrivate').value;
             if (!mid) {
-                alert('请输入 UID');
+                showToast('请输入 UID', 'error');
                 return;
             }
 
@@ -699,7 +766,10 @@
                     uname: data.uname || 'Unknown',
                     face: data.face || '',
                     monitorLive: true,
+                    notifyLiveStart: true,
+                    notifyLiveEnd: true,
                     monitorDynamic: true,
+                    notifyMissed: false,
                     atAllLive: false,
                     atAllDynamic: false,
                     targetGroups: groupsStr.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n) && n > 0),
@@ -712,9 +782,10 @@
                 config.users.push(newUser);
                 renderUsers();
                 closeModal();
-                saveUsers(); // Auto save on add
+                await saveUsers(false); // Auto save on add, no alert
+                showToast('添加成功', 'success');
             } catch (e) {
-                alert('添加失败，请检查网络或 UID');
+                showToast('添加失败，请检查网络或 UID', 'error');
             } finally {
                 btn.innerText = originalText;
                 btn.disabled = false;
@@ -725,7 +796,8 @@
             if(confirm('确定要删除吗？')) {
                 config.users.splice(index, 1);
                 renderUsers();
-                saveUsers(); // Auto save on remove
+                saveUsers(false); // Auto save on remove
+                showToast('删除成功', 'success');
             }
         }
 
@@ -765,12 +837,28 @@
                                 </div>
                                 <div style="display: flex; gap: 20px; margin-top: 10px;">
                                     <label style="display: flex; align-items: center; gap: 6px;">
+                                        <input type="checkbox" ${user.notifyLiveStart !== false ? 'checked' : ''} onchange="updateUser(${index}, 'notifyLiveStart', this.checked)">
+                                        开播通知
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px;">
+                                        <input type="checkbox" ${user.notifyLiveEnd !== false ? 'checked' : ''} onchange="updateUser(${index}, 'notifyLiveEnd', this.checked)">
+                                        下播通知
+                                    </label>
+                                </div>
+                                <div style="display: flex; gap: 20px; margin-top: 10px;">
+                                    <label style="display: flex; align-items: center; gap: 6px;">
                                         <input type="checkbox" ${user.monitorDynamic ? 'checked' : ''} onchange="updateUser(${index}, 'monitorDynamic', this.checked)">
                                         动态监控
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 6px;">
                                         <input type="checkbox" ${user.atAllDynamic ? 'checked' : ''} onchange="updateUser(${index}, 'atAllDynamic', this.checked)">
                                         动态@全体
+                                    </label>
+                                </div>
+                                <div style="display: flex; gap: 20px; margin-top: 10px;">
+                                    <label style="display: flex; align-items: center; gap: 6px;">
+                                        <input type="checkbox" ${user.notifyMissed ? 'checked' : ''} onchange="updateUser(${index}, 'notifyMissed', this.checked)">
+                                        通知历史消息
                                     </label>
                                 </div>
                             </div>
@@ -807,8 +895,8 @@
             }
         }
 
-        async function saveUsers() {
-            await saveGlobalConfig();
+        async function saveUsers(showAlert = true) {
+            await saveGlobalConfig(showAlert);
         }
 
         loadConfig();
