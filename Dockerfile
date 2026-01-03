@@ -1,33 +1,37 @@
-FROM node:18-slim
+FROM node:18-alpine
 
-# 安装 Puppeteer 所需的依赖和中文字体
-RUN apt-get update \
-    && apt-get install -y wget gnupg \
-    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/googlechrome-linux-keyring.gpg \
-    && sh -c 'echo "deb [arch=amd64 signed-by=/usr/share/keyrings/googlechrome-linux-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list' \
-    && apt-get update \
-    && apt-get install -y google-chrome-stable fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf libxss1 \
-      --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+# 安装 Chromium 和中文字体
+# font-wqy-zenhei 用于支持中文显示
+# 显式指定 community 仓库以确保能找到字体包
+RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories \
+    && echo "http://dl-cdn.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories \
+    && apk update \
+    && apk add --no-cache \
+      chromium \
+      nss \
+      freetype \
+      harfbuzz \
+      ca-certificates \
+      ttf-freefont \
+      font-wqy-zenhei
 
-# 设置工作目录
+# 设置环境变量
+# 1. 跳过 Puppeteer 下载自带的 Chromium (节省 ~170MB)
+# 2. 指定使用系统安装的 Chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
 WORKDIR /app
 
-# 复制依赖文件
 COPY package*.json ./
 
 # 安装依赖
-# 如果 puppeteer 安装失败，可以尝试设置 PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true 并使用 google-chrome-stable
 RUN npm install --production
 
-# 复制源代码
 COPY . .
 
-# 创建数据目录
 RUN mkdir -p data
 
-# 暴露端口
 EXPOSE 3002
 
-# 启动命令
 CMD ["npm", "start"]
