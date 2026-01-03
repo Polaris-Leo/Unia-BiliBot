@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unia Bot 控制台</title>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #00a1d6;
+            --bg-color: #f4f5f7;
+            --card-bg: #ffffff;
+            --text-color: #333;
+            --border-color: #e7e7e7;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 100%;
+            margin: 0;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px 0;
+            position: relative;
+        }
+        .user-menu {
+            position: absolute;
+            top: 20px;
+            right: 0;
+            display: flex;
+            align-items: center;
+        }
+        .login-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .user-info {
+            position: relative;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1px solid #eee;
+        }
+        .user-name {
+            font-weight: 500;
+            color: #333;
+        }
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: white;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            min-width: 120px;
+            display: none;
+            z-index: 100;
+            margin-top: 8px;
+        }
+        .dropdown-menu.show {
+            display: block;
+        }
+        .dropdown-item {
+            padding: 10px 16px;
+            color: #333;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .dropdown-item:hover {
+            background: #f4f5f7;
+        }
+        .dropdown-item.danger {
+            color: #ff4d4f;
+        }
+        h1 {
+            color: var(--primary-color);
+            margin: 0 0 10px 0;
+            font-size: 2rem;
+        }
+        header p {
+            color: #666;
+            margin: 0;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+        @media (min-width: 850px) {
+            .grid {
+                grid-template-columns: 350px 1fr;
+            }
+        }
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            padding: 24px;
+            margin-bottom: 20px;
+            transition: transform 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+        }
+        .card h2 {
+            margin-top: 0;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+            font-size: 1.2rem;
+            color: #444;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            color: #555;
+        }
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 0.95rem;
+            transition: border-color 0.2s;
+        }
+        input[type="text"]:focus, input[type="number"]:focus {
+            border-color: var(--primary-color);
+            outline: none;
+        }
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background-color: #00b5e5;
+            transform: translateY(-1px);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        button.secondary {
+            background-color: #f4f5f7;
+            color: #333;
+            border: 1px solid #ccc;
+        }
+        button.secondary:hover {
+            background-color: #e7e7e7;
+        }
+        button.danger {
+            background-color: #ff4d4f;
+            padding: 6px 12px;
+            font-size: 0.85rem;
+        }
+        button.danger:hover {
+            background-color: #ff7875;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: #eee;
+            color: #666;
+        }
+        .status-success { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+        .status-warning { background: #fffbe6; color: #fa8c16; border: 1px solid #ffe58f; }
+        
+        .user-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .user-item {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            background: #fff;
+        }
+        .user-header {
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            background: #fff;
+            transition: background 0.2s;
+        }
+        .user-header:hover {
+            background: #f9f9f9;
+        }
+        .user-basic-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .user-face {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 1px solid #eee;
+            object-fit: cover;
+        }
+        .user-details {
+            display: flex;
+            flex-direction: column;
+        }
+        .user-name-display {
+            font-weight: 600;
+            font-size: 1rem;
+            color: #333;
+        }
+        .user-meta {
+            font-size: 0.85rem;
+            color: #999;
+            display: flex;
+            gap: 10px;
+        }
+        .toggle-icon {
+            color: #999;
+            transition: transform 0.3s;
+        }
+        .user-item.active .toggle-icon {
+            transform: rotate(180deg);
+        }
+        .user-config {
+            display: none;
+            padding: 20px;
+            background: #fcfcfc;
+            border-top: 1px solid var(--border-color);
+        }
+        .user-item.active .user-config {
+            display: block;
+        }
+        .config-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .config-section {
+            background: #fff;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #eee;
+        }
+        .config-section h4 {
+            margin: 0 0 10px 0;
+            font-size: 0.9rem;
+            color: #666;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
+        }
+        
+        .qrcode-container {
+            text-align: center;
+            margin: 20px 0;
+            min-height: 180px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f9f9f9;
+            border-radius: 8px;
+            border: 2px dashed #eee;
+        }
+        .cookie-box {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 12px;
+            border-radius: 6px;
+            font-family: "Consolas", "Monaco", monospace;
+            font-size: 0.8rem;
+            word-break: break-all;
+            max-height: 100px;
+            overflow-y: auto;
+            margin-top: 5px;
+        }
+        .tips {
+            font-size: 0.85rem;
+            color: #888;
+            margin-top: 8px;
+            line-height: 1.4;
+        }
+        .flex-row {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            width: 400px;
+            max-width: 90%;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            animation: modalFadeIn 0.2s;
+        }
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .modal h3 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Unia BiliBili Bot</h1>
+            <p>Bilibili 动态与直播监控助手</p>
+            <div class="user-menu" id="userMenu">
+                <button class="login-btn" onclick="openLoginModal()">登录 Bilibili</button>
+            </div>
+        </header>
+
+        <div class="grid">
+            <!-- Left Column: Settings -->
+            <div>
+                <div class="card">
+                    <h2>全局配置</h2>
+                    <div class="form-group">
+                        <label>NapCat HTTP URL</label>
+                        <input type="text" id="napcatUrl" placeholder="http://127.0.0.1:3000">
+                    </div>
+                    <div class="form-group">
+                        <label>NapCat WS URL</label>
+                        <input type="text" id="napcatWsUrl" placeholder="ws://127.0.0.1:3001">
+                    </div>
+                    <div class="form-group">
+                        <label>NapCat Token (可选)</label>
+                        <input type="text" id="napcatToken" placeholder="如果在 NapCat 中设置了 Token">
+                    </div>
+                    <div class="tips">
+                        * 优先使用 WebSocket，失败回退 HTTP<br>
+                        * 请确保 NapCat 已开启对应端口
+                    </div>
+                    <button onclick="saveGlobalConfig()" style="width: 100%; margin-top: 15px;">保存配置</button>
+                </div>
+            </div>
+
+            <!-- Right Column: Monitor List -->
+            <div>
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h2 style="margin: 0;">监控列表</h2>
+                        <button onclick="openModal()" style="font-size: 0.9rem; padding: 6px 12px;">+ 添加</button>
+                    </div>
+
+                    <div id="userList" class="user-list">
+                        <!-- Users will be rendered here -->
+                    </div>
+                    
+                    <div style="margin-top: 20px; text-align: right;">
+                        <button onclick="saveUsers()" class="secondary">保存列表更改</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div class="modal-overlay" id="loginModal">
+        <div class="modal" style="text-align: center;">
+            <h3>扫码登录 Bilibili</h3>
+            <div class="qrcode-container" id="qrcode">
+                <span style="color: #999;">正在获取二维码...</span>
+            </div>
+            <div id="login-status-text" style="margin: 15px 0; color: #666;">请使用 Bilibili 手机客户端扫码</div>
+            <div class="modal-actions" style="justify-content: center;">
+                <button class="secondary" onclick="closeLoginModal()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div class="modal-overlay" id="addModal">
+        <div class="modal">
+            <h3>添加新监控</h3>
+            <div class="form-group">
+                <label>用户 UID (MID)</label>
+                <input type="text" id="modalMid" placeholder="请输入 Bilibili UID">
+            </div>
+            <div class="form-group">
+                <label>推送群号 (逗号分隔)</label>
+                <input type="text" id="modalGroups" placeholder="例如: 123456, 789012">
+            </div>
+            <div class="form-group">
+                <label>推送私信 QQ (逗号分隔)</label>
+                <input type="text" id="modalPrivate" placeholder="例如: 111222">
+            </div>
+            <div class="modal-actions">
+                <button class="secondary" onclick="closeModal()">取消</button>
+                <button onclick="addUser()">确定添加</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let config = {};
+        let pollTimer = null;
+        let currentUser = null;
+
+        async function loadConfig() {
+            try {
+                const res = await fetch('/api/config');
+                config = await res.json();
+                document.getElementById('napcatUrl').value = config.napcatUrl;
+                document.getElementById('napcatWsUrl').value = config.napcatWsUrl || '';
+                document.getElementById('napcatToken').value = config.napcatToken || '';
+                
+                if (config.cookie) {
+                    await fetchUserInfo();
+                } else {
+                    renderUserMenu();
+                }
+                
+                renderUsers();
+                
+                // Auto-update missing info
+                refreshMissingUserInfo();
+            } catch (e) {
+                console.error("Failed to load config", e);
+            }
+        }
+
+        async function refreshMissingUserInfo() {
+            let updated = false;
+            // Process sequentially to avoid rate limits
+            for (let i = 0; i < config.users.length; i++) {
+                const user = config.users[i];
+                if (!user.uname || !user.face) {
+                    try {
+                        const res = await fetch(`/api/resolve-user?mid=${user.mid}`);
+                        const data = await res.json();
+                        
+                        if (data.uname) {
+                            config.users[i].uname = data.uname;
+                            config.users[i].face = data.face;
+                            if (data.roomId) config.users[i].roomId = data.roomId;
+                            updated = true;
+                            // Update individual item in UI immediately for better UX
+                            renderUsers(); 
+                        }
+                    } catch (e) {
+                        console.error(`Failed to update info for ${user.mid}`, e);
+                    }
+                    // Small delay
+                    await new Promise(r => setTimeout(r, 500));
+                }
+            }
+            
+            if (updated) {
+                saveUsers();
+            }
+        }
+
+        async function fetchUserInfo() {
+            try {
+                const res = await fetch('/api/user-info');
+                const data = await res.json();
+                if (data.code === 0 && data.data.isLogin) {
+                    currentUser = data.data;
+                } else {
+                    currentUser = null; // Cookie might be invalid
+                }
+            } catch (e) {
+                console.error("Failed to fetch user info", e);
+                currentUser = null;
+            }
+            renderUserMenu();
+        }
+
+        function renderUserMenu() {
+            const menu = document.getElementById('userMenu');
+            if (currentUser) {
+                menu.innerHTML = `
+                    <div class="user-info" onclick="toggleDropdown()">
+                        <img src="${currentUser.face}" class="user-avatar" referrerpolicy="no-referrer">
+                        <span class="user-name">${currentUser.uname}</span>
+                        <div class="dropdown-menu" id="userDropdown">
+                            <div class="dropdown-item danger" onclick="logout()">退出登录</div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                menu.innerHTML = `<button class="login-btn" onclick="openLoginModal()">登录 Bilibili</button>`;
+            }
+        }
+
+        function toggleDropdown() {
+            const dropdown = document.getElementById('userDropdown');
+            if (dropdown) {
+                dropdown.classList.toggle('show');
+            }
+        }
+
+        // Close dropdown when clicking outside
+        window.onclick = function(event) {
+            if (!event.target.closest('.user-info')) {
+                const dropdowns = document.getElementsByClassName("dropdown-menu");
+                for (let i = 0; i < dropdowns.length; i++) {
+                    const openDropdown = dropdowns[i];
+                    if (openDropdown.classList.contains('show')) {
+                        openDropdown.classList.remove('show');
+                    }
+                }
+            }
+            if (event.target.classList.contains('modal-overlay')) {
+                if (event.target.id === 'loginModal') closeLoginModal();
+                if (event.target.id === 'addModal') closeModal();
+            }
+        }
+
+        function openLoginModal() {
+            document.getElementById('loginModal').style.display = 'flex';
+            getQRCode();
+        }
+
+        function closeLoginModal() {
+            document.getElementById('loginModal').style.display = 'none';
+            if (pollTimer) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+            }
+        }
+
+        async function logout() {
+            if (confirm('确定要退出登录吗？')) {
+                config.cookie = '';
+                await saveGlobalConfig(false); // Save without alert
+                currentUser = null;
+                renderUserMenu();
+            }
+        }
+
+        async function getQRCode() {
+            const container = document.getElementById('qrcode');
+            container.innerHTML = '<span style="color: #999;">正在获取二维码...</span>';
+            
+            try {
+                const res = await fetch('/api/qrcode');
+                const data = await res.json();
+                if (data.code === 0) {
+                    const url = data.data.url;
+                    const key = data.data.qrcode_key;
+                    
+                    const canvas = document.createElement('canvas');
+                    QRCode.toCanvas(canvas, url, { width: 180, margin: 2 }, function (error) {
+                        if (error) console.error(error);
+                    });
+                    container.innerHTML = '';
+                    container.appendChild(canvas);
+                    
+                    document.getElementById('login-status-text').innerText = '请使用 Bilibili 手机客户端扫码';
+                    
+                    if (pollTimer) clearInterval(pollTimer);
+                    pollTimer = setInterval(() => poll(key), 3000);
+                }
+            } catch (e) {
+                container.innerHTML = '<span style="color: red;">获取二维码失败</span>';
+            }
+        }
+
+        async function poll(key) {
+            const res = await fetch(`/api/qrcode/poll?qrcode_key=${key}`);
+            const data = await res.json();
+            if (data.data.code === 0) {
+                clearInterval(pollTimer);
+                document.getElementById('login-status-text').innerText = '登录成功!';
+                
+                config.cookie = data.data.cookie;
+                await saveGlobalConfig(false);
+                
+                // Fetch user info and close modal
+                await fetchUserInfo();
+                setTimeout(closeLoginModal, 1000);
+                
+            } else if (data.data.code === 86038) {
+                document.getElementById('login-status-text').innerText = '二维码已失效，请重新打开';
+                clearInterval(pollTimer);
+            }
+        }
+
+        async function saveGlobalConfig(showAlert = true) {
+            config.napcatUrl = document.getElementById('napcatUrl').value;
+            config.napcatWsUrl = document.getElementById('napcatWsUrl').value;
+            config.napcatToken = document.getElementById('napcatToken').value;
+            await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+            if (showAlert) alert('配置已保存');
+        }
+
+        function openModal() {
+            document.getElementById('addModal').style.display = 'flex';
+            document.getElementById('modalMid').focus();
+        }
+
+        function closeModal() {
+            document.getElementById('addModal').style.display = 'none';
+            // Clear inputs
+            document.getElementById('modalMid').value = '';
+            document.getElementById('modalGroups').value = '';
+            document.getElementById('modalPrivate').value = '';
+        }
+
+        async function addUser() {
+            const mid = document.getElementById('modalMid').value;
+            const groupsStr = document.getElementById('modalGroups').value;
+            const privateStr = document.getElementById('modalPrivate').value;
+            if (!mid) {
+                alert('请输入 UID');
+                return;
+            }
+
+            const btn = document.querySelector('#addModal button:last-child');
+            const originalText = btn.innerText;
+            btn.innerText = '查询中...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`/api/resolve-user?mid=${mid}`);
+                const data = await res.json();
+                
+                const newUser = {
+                    mid: mid,
+                    roomId: data.roomId || '',
+                    uname: data.uname || 'Unknown',
+                    face: data.face || '',
+                    monitorLive: true,
+                    monitorDynamic: true,
+                    atAllLive: false,
+                    atAllDynamic: false,
+                    targetGroups: groupsStr.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n) && n > 0),
+                    targetPrivate: privateStr.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n) && n > 0),
+                    lastDynamicId: '',
+                    isLive: false,
+                    lastLiveStart: 0
+                };
+                
+                config.users.push(newUser);
+                renderUsers();
+                closeModal();
+                saveUsers(); // Auto save on add
+            } catch (e) {
+                alert('添加失败，请检查网络或 UID');
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        function removeUser(index) {
+            if(confirm('确定要删除吗？')) {
+                config.users.splice(index, 1);
+                renderUsers();
+                saveUsers(); // Auto save on remove
+            }
+        }
+
+        function renderUsers() {
+            const container = document.getElementById('userList');
+            container.innerHTML = '';
+            config.users.forEach((user, index) => {
+                const item = document.createElement('div');
+                item.className = 'user-item';
+                item.innerHTML = `
+                    <div class="user-header" onclick="toggleUserConfig(this)">
+                        <div class="user-basic-info">
+                            <img src="${user.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'}" class="user-face" referrerpolicy="no-referrer">
+                            <div class="user-details">
+                                <div class="user-name-display">${user.uname || user.mid}</div>
+                                <div class="user-meta">
+                                    <span>UID: ${user.mid}</span>
+                                    ${user.roomId ? `<span>直播间: ${user.roomId}</span>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="toggle-icon">▼</div>
+                    </div>
+                    <div class="user-config">
+                        <div class="config-grid">
+                            <div class="config-section">
+                                <h4>监控开关</h4>
+                                <div style="display: flex; gap: 20px;">
+                                    <label style="display: flex; align-items: center; gap: 6px;">
+                                        <input type="checkbox" ${user.monitorLive ? 'checked' : ''} onchange="updateUser(${index}, 'monitorLive', this.checked)">
+                                        直播监控
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px;">
+                                        <input type="checkbox" ${user.atAllLive ? 'checked' : ''} onchange="updateUser(${index}, 'atAllLive', this.checked)">
+                                        直播@全体
+                                    </label>
+                                </div>
+                                <div style="display: flex; gap: 20px; margin-top: 10px;">
+                                    <label style="display: flex; align-items: center; gap: 6px;">
+                                        <input type="checkbox" ${user.monitorDynamic ? 'checked' : ''} onchange="updateUser(${index}, 'monitorDynamic', this.checked)">
+                                        动态监控
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px;">
+                                        <input type="checkbox" ${user.atAllDynamic ? 'checked' : ''} onchange="updateUser(${index}, 'atAllDynamic', this.checked)">
+                                        动态@全体
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="config-section">
+                                <h4>推送目标</h4>
+                                <div style="margin-bottom: 10px;">
+                                    <label style="display: block; font-size: 0.85rem; color: #666; margin-bottom: 4px;">群号 (逗号分隔)</label>
+                                    <input type="text" value="${user.targetGroups.join(',')}" onchange="updateUser(${index}, 'targetGroups', this.value)" style="width: 100%;">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 0.85rem; color: #666; margin-bottom: 4px;">QQ号 (逗号分隔)</label>
+                                    <input type="text" value="${(user.targetPrivate || []).join(',')}" onchange="updateUser(${index}, 'targetPrivate', this.value)" style="width: 100%;">
+                                </div>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <button onclick="removeUser(${index})" class="danger">删除此监控</button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function toggleUserConfig(header) {
+            header.parentElement.classList.toggle('active');
+        }
+
+        function updateUser(index, field, value) {
+            if (field === 'targetGroups' || field === 'targetPrivate') {
+                config.users[index][field] = value.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n) && n > 0);
+            } else {
+                config.users[index][field] = value;
+            }
+        }
+
+        async function saveUsers() {
+            await saveGlobalConfig();
+        }
+
+        loadConfig();
+    </script>
+</body>
+</html>

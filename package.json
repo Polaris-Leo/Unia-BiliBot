@@ -1,0 +1,18 @@
+{
+  "name": "unia-bilibot",
+  "version": "1.0.0",
+  "description": "Bilibili dynamic and live monitor bot",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "body-parser": "^1.20.0",
+    "express": "^4.18.0",
+    "puppeteer": "^24.34.0",
+    "qrcode": "^1.5.0",
+    "ws": "^8.18.3"
+  }
+}
