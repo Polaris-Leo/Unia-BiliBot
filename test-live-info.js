@@ -18,6 +18,8 @@ async function test() {
 
     console.log('\nFetching status info by UID...');
     const status = await biliApi.getLiveStatus(MID);
+    console.log('Full Status Object:', JSON.stringify(status, null, 2));
+
     if (status) {
         console.log('✅ Live Status Fetched Successfully');
         console.log(`Uname: ${status.uname}`);

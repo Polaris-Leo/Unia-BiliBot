@@ -31,13 +31,23 @@ async function checkLiveStatus(user) {
             
             let msgType = 'start'; // default: > 15 mins or first time
             
-            if (lastEnd > 0 && gap < 15 * 60 * 1000) {
+            if (lastEnd > 0 && gap <= 15 * 60 * 1000) {
                 // 3-15 mins (Note: <3 mins is handled by not setting isLive=false)
                 msgType = 'resume';
             }
 
             user.isLive = true;
-            user.lastLiveStart = now;
+            
+            if (msgType === 'start') {
+                // New session: Use Bilibili's live_time if available (seconds -> ms), otherwise fallback to now
+                user.lastLiveStart = (liveInfo.live_time && liveInfo.live_time > 0) ? liveInfo.live_time * 1000 : now;
+            } else {
+                // Resume session: Keep existing lastLiveStart if available
+                if (!user.lastLiveStart) {
+                     user.lastLiveStart = (liveInfo.live_time && liveInfo.live_time > 0) ? liveInfo.live_time * 1000 : now;
+                }
+            }
+
             user.offlineSince = 0;
             
             let msg = '';
