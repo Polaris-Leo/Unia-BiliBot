@@ -1,10 +1,9 @@
 FROM node:18-alpine
 
 # 安装 Chromium 和中文字体
-# font-wqy-zenhei 用于支持中文显示
-# 显式指定 community 仓库以确保能找到字体包
-RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories \
-    && echo "http://dl-cdn.alpinelinux.org/alpine/edge/main" >> /etc/apk/repositories \
+# 1. 替换为国内源（阿里云）以提高下载速度和稳定性
+# 2. 安装 Chromium 和文泉驿微米黑字体
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories \
     && apk update \
     && apk add --no-cache \
       chromium \
