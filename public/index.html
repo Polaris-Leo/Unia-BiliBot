@@ -885,6 +885,44 @@
                                     <input type="text" value="${(user.targetPrivate || []).join(',')}" onchange="updateUser(${index}, 'targetPrivate', this.value)" style="width: 100%;">
                                 </div>
                             </div>
+
+                            <div class="config-section">
+                                <h4 style="cursor: pointer; display: flex; justify-content: space-between;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                                    <span>自定义文案 (点击展开)</span>
+                                    <span style="font-size: 0.8rem; color: #999;">▼</span>
+                                </h4>
+                                <div style="display: none; margin-top: 15px;">
+                                    <div style="background: #f6f7f9; padding: 12px; border-radius: 6px; margin-bottom: 15px; font-size: 0.85rem; color: #666; border: 1px solid #eee;">
+                                        <div style="font-weight: 600; margin-bottom: 8px; color: #444;">变量说明：</div>
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                            <div><code style="background: #e4e6eb; padding: 2px 4px; border-radius: 3px;">{name}</code> 主播昵称</div>
+                                            <div><code style="background: #e4e6eb; padding: 2px 4px; border-radius: 3px;">{title}</code> 直播标题</div>
+                                            <div><code style="background: #e4e6eb; padding: 2px 4px; border-radius: 3px;">{link}</code> 直播间/动态链接</div>
+                                            <div><code style="background: #e4e6eb; padding: 2px 4px; border-radius: 3px;">{cover}</code> 直播封面图</div>
+                                            <div><code style="background: #e4e6eb; padding: 2px 4px; border-radius: 3px;">{duration}</code> 直播时长</div>
+                                            <div><code style="background: #e4e6eb; padding: 2px 4px; border-radius: 3px;">{image}</code> 动态卡片图片</div>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>开播通知</label>
+                                        <textarea rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;" 
+                                            placeholder="默认: {name} 开播啦！【{title}】&#10;{link}&#10;{cover}"
+                                            onchange="updateUser(${index}, 'liveStartMsg', this.value)">${user.liveStartMsg || '{name} 开播啦！【{title}】\n{link}\n{cover}'}</textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>下播通知</label>
+                                        <textarea rows="2" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;" 
+                                            placeholder="默认: {name} 下播了。&#10;本次直播时长：{duration}"
+                                            onchange="updateUser(${index}, 'liveEndMsg', this.value)">${user.liveEndMsg || '{name} 下播了。\n本次直播时长：{duration}'}</textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>动态通知</label>
+                                        <textarea rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;" 
+                                            placeholder="默认: {name} 发新动态了&#10;{link}&#10;{image}"
+                                            onchange="updateUser(${index}, 'dynamicMsg', this.value)">${user.dynamicMsg || '{name} 发新动态了\n{link}\n{image}'}</textarea>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div style="text-align: right;">
                             <button onclick="removeUser(${index})" class="danger">删除此监控</button>

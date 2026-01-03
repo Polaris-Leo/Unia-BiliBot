@@ -7,6 +7,13 @@ const POLL_INTERVAL = 30 * 1000; // 30 seconds
 const retryMap = new Map(); // mid -> Set<dynamicId>
 let isFirstRun = true;
 
+function formatMessage(template, variables) {
+    if (!template) return null;
+    return template.replace(/\{(\w+)\}/g, (match, key) => {
+        return variables[key] !== undefined ? variables[key] : match;
+    });
+}
+
 async function checkLiveStatus(user) {
     if (!user.monitorLive || !user.mid) return;
 
@@ -62,10 +69,23 @@ async function checkLiveStatus(user) {
             user.offlineSince = 0;
             
             let msg = '';
-            if (msgType === 'resume') {
-                msg = `${liveInfo.uname} 已重新开播！【${liveInfo.title}】\nhttps://live.bilibili.com/${liveInfo.room_id}\n[CQ:image,file=${liveInfo.cover_from_user}]`;
+            const variables = {
+                name: liveInfo.uname,
+                title: liveInfo.title,
+                room_id: liveInfo.room_id,
+                link: `https://live.bilibili.com/${liveInfo.room_id}`,
+                cover: `[CQ:image,file=${liveInfo.cover_from_user}]`
+            };
+
+            if (user.liveStartMsg) {
+                msg = formatMessage(user.liveStartMsg, variables);
             } else {
-                msg = `${liveInfo.uname} 开播啦！【${liveInfo.title}】\nhttps://live.bilibili.com/${liveInfo.room_id}\n[CQ:image,file=${liveInfo.cover_from_user}]`;
+                // Default format
+                if (msgType === 'resume') {
+                    msg = `${liveInfo.uname} 已重新开播！【${liveInfo.title}】\nhttps://live.bilibili.com/${liveInfo.room_id}\n[CQ:image,file=${liveInfo.cover_from_user}]`;
+                } else {
+                    msg = `${liveInfo.uname} 开播啦！【${liveInfo.title}】\nhttps://live.bilibili.com/${liveInfo.room_id}\n[CQ:image,file=${liveInfo.cover_from_user}]`;
+                }
             }
             
             if (user.notifyLiveStart !== false) {
@@ -105,7 +125,17 @@ async function checkLiveStatus(user) {
                     const duration = user.lastLiveStart ? (user.lastLiveEnd - user.lastLiveStart) : 0;
                     const durationStr = formatDuration(duration);
                     
-                    const msg = `${liveInfo.uname} 下播了。\n本次直播时长：${durationStr}`;
+                    let msg = '';
+                    const variables = {
+                        name: liveInfo.uname,
+                        duration: durationStr
+                    };
+
+                    if (user.liveEndMsg) {
+                        msg = formatMessage(user.liveEndMsg, variables);
+                    } else {
+                        msg = `${liveInfo.uname} 下播了。\n本次直播时长：${durationStr}`;
+                    }
                     
                     if (user.notifyLiveEnd !== false) {
                         for (const groupId of user.targetGroups) {
@@ -217,7 +247,7 @@ async function checkDynamics(user) {
             isRetry = true;
         }
 
-        let msg = await parseDynamic(item);
+        let msg = await parseDynamic(item, user);
         if (isRetry) {
             msg = '<补发>\n' + msg;
         }
@@ -277,7 +307,7 @@ async function checkDynamics(user) {
     // It is updated incrementally inside the loop upon success
 }
 
-async function parseDynamic(item) {
+async function parseDynamic(item, user) {
     const author = item.modules.module_author.name;
     const dynamicModule = item.modules.module_dynamic;
     
@@ -304,23 +334,32 @@ async function parseDynamic(item) {
         }
     }
 
-    // Format:
-    // （用户名）发新动态了<换行>
-    // （链接）<换行>
-    // （图片）
-    
-    let msg = `${author} 发新动态了\n${jumpUrl}`;
-    
+    let msg = '';
+    let imageCQ = '';
+
     try {
         const imageBuffer = await generateDynamicCard(item);
         const base64 = imageBuffer.toString('base64');
-        msg += `\n[CQ:image,file=base64://${base64}]`;
+        imageCQ = `[CQ:image,file=base64://${base64}]`;
     } catch (error) {
         console.error('Error generating dynamic card:', error);
         // Fallback to first image if generation fails
         if (images.length > 0) {
-            msg += `\n[CQ:image,file=${images[0]}]`;
+            imageCQ = `[CQ:image,file=${images[0]}]`;
         }
+    }
+
+    const variables = {
+        name: author,
+        link: jumpUrl,
+        image: imageCQ
+    };
+
+    if (user && user.dynamicMsg) {
+        msg = formatMessage(user.dynamicMsg, variables);
+    } else {
+        // Default format
+        msg = `${author} 发新动态了\n${jumpUrl}\n${imageCQ}`;
     }
 
     return msg;
