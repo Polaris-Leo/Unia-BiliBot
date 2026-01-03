@@ -1,0 +1,14 @@
+version: '3'
+services:
+  unia-bilibot:
+    build: .
+    container_name: unia-bilibot
+    restart: always
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - TZ=Asia/Shanghai
+      # 如果 puppeteer 启动报错，可能需要添加以下参数
+      # - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
