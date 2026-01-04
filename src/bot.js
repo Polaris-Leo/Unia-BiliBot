@@ -3,7 +3,7 @@ import * as biliApi from './bili-api.js';
 import * as napcat from './napcat.js';
 import { generateDynamicCard } from './image-generator.js';
 
-const POLL_INTERVAL = 30 * 1000; // 30 seconds
+const POLL_INTERVAL = 60 * 1000; // Increased to 60 seconds for performance
 const retryMap = new Map(); // mid -> Map<dynamicId, retryCount>
 const MAX_RETRIES = 3;
 let isFirstRun = true;
@@ -389,6 +389,24 @@ function formatDuration(ms) {
     return `${h}小时${m}分${s}秒`;
 }
 
+function withTimeout(promise, ms) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            reject(new Error('Operation timed out'));
+        }, ms);
+        
+        promise
+            .then(value => {
+                clearTimeout(timer);
+                resolve(value);
+            })
+            .catch(reason => {
+                clearTimeout(timer);
+                reject(reason);
+            });
+    });
+}
+
 export async function startBot() {
     console.log('Bot started...');
     
@@ -407,8 +425,11 @@ export async function startBot() {
             
             for (const user of config.data.users) {
                 try {
-                    await checkLiveStatus(user);
-                    await checkDynamics(user);
+                    // Wrap checks in a timeout (e.g. 60 seconds per user) to prevent hanging
+                    await withTimeout((async () => {
+                        await checkLiveStatus(user);
+                        await checkDynamics(user);
+                    })(), 60000);
 
                     let status = 'Offline';
                     if (user.isLive) {

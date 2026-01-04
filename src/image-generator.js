@@ -11,7 +11,16 @@ async function getBrowser() {
         }
         browser = await puppeteer.launch({
             headless: 'new',
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
+            args: [
+                '--no-sandbox', 
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage', // Fix for Docker low memory
+                '--disable-gpu',
+                '--disable-extensions',
+                '--no-first-run',
+                '--no-zygote'
+            ],
+            protocolTimeout: 120000 // 2 minutes
         });
     }
     return browser;
@@ -190,10 +199,11 @@ function generateHtml(item) {
 }
 
 export async function generateDynamicCard(item) {
-    const browser = await getBrowser();
-    const page = await browser.newPage();
-    
+    let page = null;
     try {
+        const browser = await getBrowser();
+        page = await browser.newPage();
+    
         // Set viewport with high pixel density for better quality
         await page.setViewport({
             width: 600,
@@ -205,7 +215,7 @@ export async function generateDynamicCard(item) {
         // Set a timeout for content loading to prevent hanging indefinitely
         await page.setContent(html, { 
             waitUntil: 'networkidle0',
-            timeout: 15000 // 15 seconds timeout
+            timeout: 30000 // 30 seconds timeout
         });
         
         // Get the height of the card
@@ -223,12 +233,24 @@ export async function generateDynamicCard(item) {
         return buffer;
     } catch (error) {
         console.error('Error in generateDynamicCard:', error);
+        // If we hit a protocol error or timeout, the browser might be in a bad state.
+        // Close it so it gets recreated next time.
+        if (browser) {
+            try {
+                await browser.close();
+            } catch (e) {
+                console.error('Error closing browser on failure:', e);
+            }
+            browser = null;
+        }
         throw error;
     } finally {
-        try {
-            await page.close();
-        } catch (e) {
-            console.error('Error closing page:', e);
+        if (page) {
+            try {
+                await page.close();
+            } catch (e) {
+                console.error('Error closing page:', e);
+            }
         }
     }
 }
