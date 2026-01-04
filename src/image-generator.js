@@ -128,9 +128,9 @@ function generateHtml(item) {
         
         // Append forwarded content to main content
         content += `
-            <div class="forward-container" style="background: #f4f5f7; padding: 10px; margin-top: 10px; border-radius: 4px;">
-                <div style="color: #00a1d6; font-weight: bold; margin-bottom: 5px;">@${origAuthor}</div>
-                <div style="color: #666;">${origContent.replace(/\n/g, '<br>')}</div>
+            <div class="forward-container" style="background: #f7f8fa; padding: 12px 16px; margin-top: 12px; border-radius: 8px;">
+                <div style="color: #00a1d6; font-weight: bold; margin-bottom: 8px; font-size: 15px;">@${origAuthor}</div>
+                <div style="color: #333; line-height: 1.6; font-size: 15px;">${origContent.replace(/\n/g, '<br>')}</div>
                 ${origImages.length > 0 ? `<div style="margin-top: 10px;">[图片 x ${origImages.length}]</div>` : ''}
             </div>
         `;
@@ -261,9 +261,6 @@ function generateHtml(item) {
             height: auto;
             border-radius: 4px;
             display: block;
-            max-height: 600px;
-            object-fit: contain;
-            background-color: #f0f0f0;
         }
     </style>
 </head>
