@@ -22,6 +22,22 @@ function formatTime(timestamp) {
     return date.toLocaleString('zh-CN', { hour12: false });
 }
 
+function processRichText(nodeContainer) {
+    if (!nodeContainer) return '';
+    let text = nodeContainer.text || '';
+    if (nodeContainer.rich_text_nodes) {
+        nodeContainer.rich_text_nodes.forEach(node => {
+            if (node.type === 'RICH_TEXT_NODE_TYPE_EMOJI' && node.emoji) {
+                const emojiText = node.text;
+                const emojiUrl = node.emoji.icon_url;
+                const escapedText = emojiText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                text = text.replace(new RegExp(escapedText, 'g'), `<img src="${emojiUrl}" style="width:20px;height:20px;vertical-align:text-bottom;margin:0 2px;">`);
+            }
+        });
+    }
+    return text;
+}
+
 function generateHtml(item) {
     const author = item.modules.module_author;
     const dynamic = item.modules.module_dynamic;
@@ -36,7 +52,7 @@ function generateHtml(item) {
     if (dynamic.major) {
         const major = dynamic.major;
         if (major.opus) {
-            content = major.opus.summary.text;
+            content = processRichText(major.opus.summary);
             if (major.opus.pics) images = major.opus.pics.map(p => p.url);
         } else if (major.archive) {
             content = major.archive.desc;
@@ -51,7 +67,7 @@ function generateHtml(item) {
     }
     
     if (dynamic.desc) {
-        content = dynamic.desc.text + '\n' + content;
+        content = processRichText(dynamic.desc) + '\n' + content;
     }
 
     // Process content for HTML (newlines to <br>)
@@ -60,15 +76,21 @@ function generateHtml(item) {
     // Image Grid Logic
     let imageGridHtml = '';
     if (images.length > 0) {
-        let gridClass = 'grid-1';
-        if (images.length === 2 || images.length === 4) gridClass = 'grid-2';
-        else if (images.length >= 3) gridClass = 'grid-3';
+        if (images.length === 1) {
+            // Single image: use <img> tag to preserve aspect ratio
+            imageGridHtml = `<div class="image-grid grid-1">
+                <img src="${images[0]}" class="img-item-single" crossorigin="anonymous">
+            </div>`;
+        } else {
+            let gridClass = 'grid-2';
+            if (images.length >= 3) gridClass = 'grid-3';
 
-        imageGridHtml = `<div class="image-grid ${gridClass}">`;
-        images.forEach(img => {
-            imageGridHtml += `<div class="img-item" style="background-image: url('${img}')"></div>`;
-        });
-        imageGridHtml += `</div>`;
+            imageGridHtml = `<div class="image-grid ${gridClass}">`;
+            images.forEach(img => {
+                imageGridHtml += `<div class="img-item" style="background-image: url('${img}')"></div>`;
+            });
+            imageGridHtml += `</div>`;
+        }
     }
 
     return `
@@ -139,18 +161,15 @@ function generateHtml(item) {
             border-radius: 4px;
             background-color: #f0f0f0;
         }
-        /* Special case for single image to show full aspect */
-        .grid-1 .img-item {
-            padding-bottom: 0;
+        .img-item-single {
+            width: 100%;
             height: auto;
-            min-height: 200px;
-        }
-        .grid-1 .img-item::after {
-            content: "";
+            border-radius: 4px;
             display: block;
-            padding-bottom: 60%; /* Max height ratio constraint */
+            max-height: 600px;
+            object-fit: contain;
+            background-color: #f0f0f0;
         }
-        /* Actually for single image better to use img tag but bg is easier for grid */
     </style>
 </head>
 <body>
