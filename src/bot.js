@@ -171,17 +171,24 @@ async function checkDynamics(user) {
     let items = dynamics.data.items;
     if (items.length === 0) return;
 
-    // Filter out pinned dynamics (manually pinned) and live start dynamics
+    // Filter out live start dynamics (DYNAMIC_TYPE_LIVE_RCMD)
+    // Do NOT filter pinned dynamics, because a new dynamic might be pinned immediately.
+    // We rely on sorting by ID to distinguish new vs old.
     items = items.filter(item => {
-        const isPinned = item.modules.module_tag && item.modules.module_tag.text === '置顶';
         const isLive = item.type === 'DYNAMIC_TYPE_LIVE_RCMD';
-        return !isPinned && !isLive;
+        return !isLive;
     });
 
     if (items.length === 0) return;
 
-    // Sort by ID just in case, though usually sorted by time
-    // items.sort((a, b) => BigInt(b.id_str) - BigInt(a.id_str));
+    // Sort by ID descending to ensure we get the true latest
+    items.sort((a, b) => {
+        const idA = BigInt(a.id_str);
+        const idB = BigInt(b.id_str);
+        if (idA < idB) return 1;
+        if (idA > idB) return -1;
+        return 0;
+    });
 
     const latest = items[0];
     const latestId = latest.id_str;

@@ -64,6 +64,14 @@ function processRichText(nodeContainer) {
                 const emojiUrl = node.emoji.icon_url;
                 const escapedText = emojiText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 text = text.replace(new RegExp(escapedText, 'g'), `<img src="${emojiUrl}" style="width:20px;height:20px;vertical-align:text-bottom;margin:0 2px;">`);
+            } else if (node.type === 'RICH_TEXT_NODE_TYPE_AT') {
+                const atText = node.text;
+                const escapedText = atText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                text = text.replace(new RegExp(escapedText, 'g'), `<span style="color: #00a1d6;">${atText}</span>`);
+            } else if (node.type === 'RICH_TEXT_NODE_TYPE_TOPIC') {
+                const topicText = node.text;
+                const escapedText = topicText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                text = text.replace(new RegExp(escapedText, 'g'), `<span style="color: #00a1d6;">${topicText}</span>`);
             }
         });
     }
@@ -97,7 +105,23 @@ function generateHtml(item) {
             content = `【专栏】${major.article.title}\n${major.article.desc}`;
         }
     }
+
+    // Add description if available (e.g. for forwarded dynamics or simple text dynamics)
+    if (dynamic.desc) {
+        const descText = processRichText(dynamic.desc);
+        if (content) {
+            // Avoid duplication if descText is already in content
+            if (!content.includes(descText)) {
+                content = descText + '\n' + content;
+            }
+        } else {
+            content = descText;
+        }
+    }
     
+    // Process content for HTML (newlines to <br>)
+    content = content.replace(/\n/g, '<br>');
+
     // Handle Forwarded Dynamic
     if (item.type === 'DYNAMIC_TYPE_FORWARD' && item.orig) {
         const orig = item.orig;
@@ -123,15 +147,25 @@ function generateHtml(item) {
             }
         }
         if (origDynamic.desc) {
-            origContent = processRichText(origDynamic.desc) + '\n' + origContent;
+            const descText = processRichText(origDynamic.desc);
+            if (origContent) {
+                if (!origContent.includes(descText)) {
+                    origContent = descText + '\n' + origContent;
+                }
+            } else {
+                origContent = descText;
+            }
         }
         
+        // Trim original content to remove extra whitespace
+        origContent = origContent.trim();
+
         // Append forwarded content to main content
         content += `
-            <div class="forward-container" style="background: #f7f8fa; padding: 12px 16px; margin-top: 12px; border-radius: 8px;">
-                <div style="color: #00a1d6; font-weight: bold; margin-bottom: 8px; font-size: 15px;">@${origAuthor}</div>
-                <div style="color: #333; line-height: 1.6; font-size: 15px;">${origContent.replace(/\n/g, '<br>')}</div>
-                ${origImages.length > 0 ? `<div style="margin-top: 10px;">[图片 x ${origImages.length}]</div>` : ''}
+            <div class="forward-container" style="background: #f7f8fa; padding: 10px 12px; margin-top: 8px; border-radius: 6px;">
+                <div style="color: #00a1d6; font-weight: bold; margin-bottom: 6px; font-size: 14px;">@${origAuthor}</div>
+                <div style="color: #333; line-height: 1.5; font-size: 14px; white-space: pre-wrap;">${origContent}</div>
+                ${origImages.length > 0 ? `<div style="margin-top: 8px;">[图片 x ${origImages.length}]</div>` : ''}
             </div>
         `;
         
@@ -150,7 +184,7 @@ function generateHtml(item) {
              } else {
                 let gridClass = 'grid-2';
                 if (origImages.length >= 3) gridClass = 'grid-3';
-                origGridHtml = `<div class="image-grid ${gridClass}" style="margin-top:10px;">`;
+                origGridHtml = `<div class="image-grid ${gridClass}" style="margin-top:8px;">`;
                 origImages.forEach(img => {
                     origGridHtml += `<div class="img-item" style="background-image: url('${img}')"></div>`;
                 });
@@ -160,13 +194,6 @@ function generateHtml(item) {
              content = content.replace('[图片 x ' + origImages.length + ']', origGridHtml);
         }
     }
-    
-    if (dynamic.desc) {
-        content = processRichText(dynamic.desc) + '\n' + content;
-    }
-
-    // Process content for HTML (newlines to <br>)
-    content = content.replace(/\n/g, '<br>');
 
     // Image Grid Logic
     let imageGridHtml = '';
@@ -210,7 +237,7 @@ function generateHtml(item) {
         .header {
             display: flex;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
         .avatar {
             width: 48px;
@@ -227,7 +254,7 @@ function generateHtml(item) {
             font-weight: bold;
             font-size: 16px;
             color: #fb7299;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
         }
         .time {
             font-size: 12px;
@@ -236,13 +263,13 @@ function generateHtml(item) {
         .content {
             font-size: 15px;
             color: #333;
-            line-height: 1.6;
-            margin-bottom: 15px;
+            line-height: 1.5;
+            margin-bottom: 10px;
             word-wrap: break-word;
         }
         .image-grid {
             display: grid;
-            gap: 8px;
+            gap: 4px;
         }
         .grid-1 { grid-template-columns: 1fr; }
         .grid-2 { grid-template-columns: 1fr 1fr; }
@@ -342,6 +369,10 @@ export async function generateDynamicCard(item) {
 }
 
 export async function closeBrowser() {
+    if (browserIdleTimer) {
+        clearTimeout(browserIdleTimer);
+        browserIdleTimer = null;
+    }
     if (browser) {
         await browser.close();
         browser = null;
