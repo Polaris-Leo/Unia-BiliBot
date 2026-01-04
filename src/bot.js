@@ -29,6 +29,7 @@ async function checkLiveStatus(user) {
             console.log(`[Startup] ${user.uname} state mismatch: Memory=Live, API=Offline. Silently correcting to Offline.`);
             user.isLive = false;
             user.offlineSince = 0;
+            config.save();
             // Don't return, let it fall through to ensure clean state
         }
     }
@@ -103,6 +104,7 @@ async function checkLiveStatus(user) {
                     }
                 }
             }
+            config.save(); // Save state immediately
         }
     } else {
         // Currently Offline
@@ -146,6 +148,7 @@ async function checkLiveStatus(user) {
                                 await napcat.sendPrivateMsg(userId, msg);
                             }
                         }
+                    config.save(); // Save state immediately
                     }
                 }
             }
@@ -285,6 +288,7 @@ async function checkDynamics(user) {
             // If all failed (e.g. network error), we don't update, so it will retry next time
             if (sendSuccess) {
                 user.lastDynamicId = item.id_str;
+                config.save(); // Save immediately to prevent duplicate sends on crash/reload
                 // Remove from retryMap
                 if (retryMap.has(user.mid)) {
                     retryMap.get(user.mid).delete(item.id_str);
@@ -376,37 +380,49 @@ function formatDuration(ms) {
 export async function startBot() {
     console.log('Bot started...');
     
+    let isProcessing = false;
+
     const runChecks = async () => {
-        const now = new Date().toLocaleString();
-        const statusSummaries = [];
-        
-        for (const user of config.data.users) {
-            try {
-                await checkLiveStatus(user);
-                await checkDynamics(user);
-
-                let status = 'Offline';
-                if (user.isLive) {
-                    if (user.offlineSince > 0) {
-                        status = 'Waiting'; // Waiting for 3 mins confirmation
-                    } else {
-                        status = 'Live';
-                    }
-                }
-                statusSummaries.push(`${user.uname || user.mid}(${status})`);
-
-            } catch (error) {
-                console.error(`[${now}] Error checking user ${user.uname || user.mid}:`, error);
-                statusSummaries.push(`${user.uname || user.mid}(Error)`);
-            }
+        if (isProcessing) {
+            console.log('Skipping check cycle: Previous cycle still running.');
+            return;
         }
-        
-        console.log(`[${now}] Checked: ${statusSummaries.join(', ')}`);
-        
-        // Save state changes (isLive, lastDynamicId, etc.) to disk
-        config.save();
-        
-        if (isFirstRun) isFirstRun = false;
+        isProcessing = true;
+
+        try {
+            const now = new Date().toLocaleString();
+            const statusSummaries = [];
+            
+            for (const user of config.data.users) {
+                try {
+                    await checkLiveStatus(user);
+                    await checkDynamics(user);
+
+                    let status = 'Offline';
+                    if (user.isLive) {
+                        if (user.offlineSince > 0) {
+                            status = 'Waiting'; // Waiting for 3 mins confirmation
+                        } else {
+                            status = 'Live';
+                        }
+                    }
+                    statusSummaries.push(`${user.uname || user.mid}(${status})`);
+
+                } catch (error) {
+                    console.error(`[${now}] Error checking user ${user.uname || user.mid}:`, error);
+                    statusSummaries.push(`${user.uname || user.mid}(Error)`);
+                }
+            }
+            
+            console.log(`[${now}] Checked: ${statusSummaries.join(', ')}`);
+            
+            // Save state changes (isLive, lastDynamicId, etc.) to disk
+            config.save();
+            
+            if (isFirstRun) isFirstRun = false;
+        } finally {
+            isProcessing = false;
+        }
     };
 
     // Run immediately on startup

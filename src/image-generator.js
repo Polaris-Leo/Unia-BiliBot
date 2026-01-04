@@ -5,7 +5,10 @@ import path from 'path';
 let browser = null;
 
 async function getBrowser() {
-    if (!browser) {
+    if (!browser || !browser.isConnected()) {
+        if (browser) {
+            try { await browser.close(); } catch (e) {}
+        }
         browser = await puppeteer.launch({
             headless: 'new',
             args: ['--no-sandbox', '--disable-setuid-sandbox']
