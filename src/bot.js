@@ -329,6 +329,11 @@ async function parseDynamic(item, user) {
     
     let images = [];
     let jumpUrl = `https://t.bilibili.com/${item.id_str}`;
+    let actionText = '发新动态了';
+
+    if (item.type === 'DYNAMIC_TYPE_FORWARD') {
+        actionText = '转发了动态';
+    }
 
     if (dynamicModule.major) {
         const major = dynamicModule.major;
@@ -338,6 +343,7 @@ async function parseDynamic(item, user) {
             jumpUrl = `https://www.bilibili.com/opus/${item.id_str}`;
         } else if (major.archive) {
             // Video
+            actionText = '投稿了新视频';
             images = [major.archive.cover];
             jumpUrl = `https://www.bilibili.com/video/${major.archive.bvid}`;
         } else if (major.draw && major.draw.items) {
@@ -345,6 +351,7 @@ async function parseDynamic(item, user) {
             images = major.draw.items.map(i => i.src);
         } else if (major.article) {
             // Article
+            actionText = '发布了专栏';
             images = major.article.covers;
             jumpUrl = `https://www.bilibili.com/read/cv${major.article.id}`;
         }
@@ -368,14 +375,29 @@ async function parseDynamic(item, user) {
     const variables = {
         name: author,
         link: jumpUrl,
-        image: imageCQ
+        image: imageCQ,
+        action: actionText
     };
 
-    if (user && user.dynamicMsg) {
-        msg = formatMessage(user.dynamicMsg, variables);
+    let template = user.dynamicMsg; // Default template
+
+    // Select specific template based on type
+    if (item.type === 'DYNAMIC_TYPE_FORWARD' && user.dynamicMsg_forward) {
+        template = user.dynamicMsg_forward;
+    } else if (dynamicModule.major) {
+        const major = dynamicModule.major;
+        if (major.archive && user.dynamicMsg_video) {
+            template = user.dynamicMsg_video;
+        } else if (major.article && user.dynamicMsg_article) {
+            template = user.dynamicMsg_article;
+        }
+    }
+
+    if (user && template) {
+        msg = formatMessage(template, variables);
     } else {
         // Default format
-        msg = `${author} 发新动态了\n${jumpUrl}\n${imageCQ}`;
+        msg = `${author} ${actionText}\n${jumpUrl}\n${imageCQ}`;
     }
 
     return msg;
@@ -430,6 +452,9 @@ export async function startBot() {
                         await checkLiveStatus(user);
                         await checkDynamics(user);
                     })(), 60000);
+
+                    // Add a small delay between users to avoid rate limiting
+                    await new Promise(resolve => setTimeout(resolve, 2000));
 
                     let status = 'Offline';
                     if (user.isLive) {

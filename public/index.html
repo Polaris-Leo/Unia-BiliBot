@@ -916,10 +916,28 @@
                                             onchange="updateUser(${index}, 'liveEndMsg', this.value)">${user.liveEndMsg || '{name} 下播了。\n本次直播时长：{duration}'}</textarea>
                                     </div>
                                     <div class="form-group">
-                                        <label>动态通知</label>
+                                        <label>普通动态通知</label>
                                         <textarea rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;" 
                                             placeholder="默认: {name} 发新动态了&#10;{link}&#10;{image}"
                                             onchange="updateUser(${index}, 'dynamicMsg', this.value)">${user.dynamicMsg || '{name} 发新动态了\n{link}\n{image}'}</textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>转发动态通知</label>
+                                        <textarea rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;" 
+                                            placeholder="默认: {name} 转发了动态&#10;{link}&#10;{image}"
+                                            onchange="updateUser(${index}, 'dynamicMsg_forward', this.value)">${user.dynamicMsg_forward || '{name} 转发了动态\n{link}\n{image}'}</textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>视频投稿通知</label>
+                                        <textarea rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;" 
+                                            placeholder="默认: {name} 投稿了新视频&#10;{link}&#10;{image}"
+                                            onchange="updateUser(${index}, 'dynamicMsg_video', this.value)">${user.dynamicMsg_video || '{name} 投稿了新视频\n{link}\n{image}'}</textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>专栏发布通知</label>
+                                        <textarea rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;" 
+                                            placeholder="默认: {name} 发布了专栏&#10;{link}&#10;{image}"
+                                            onchange="updateUser(${index}, 'dynamicMsg_article', this.value)">${user.dynamicMsg_article || '{name} 发布了专栏\n{link}\n{image}'}</textarea>
                                     </div>
                                 </div>
                             </div>

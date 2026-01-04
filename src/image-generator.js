@@ -3,8 +3,16 @@ import fs from 'fs';
 import path from 'path';
 
 let browser = null;
+let browserIdleTimer = null;
+const BROWSER_IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
 async function getBrowser() {
+    // Clear idle timer if it exists
+    if (browserIdleTimer) {
+        clearTimeout(browserIdleTimer);
+        browserIdleTimer = null;
+    }
+
     if (!browser || !browser.isConnected()) {
         if (browser) {
             try { await browser.close(); } catch (e) {}
@@ -24,6 +32,21 @@ async function getBrowser() {
         });
     }
     return browser;
+}
+
+function scheduleBrowserCleanup() {
+    if (browserIdleTimer) clearTimeout(browserIdleTimer);
+    browserIdleTimer = setTimeout(async () => {
+        if (browser) {
+            console.log('Closing idle browser to save memory...');
+            try {
+                await browser.close();
+            } catch (e) {
+                console.error('Error closing idle browser:', e);
+            }
+            browser = null;
+        }
+    }, BROWSER_IDLE_TIMEOUT);
 }
 
 function formatTime(timestamp) {
@@ -72,6 +95,69 @@ function generateHtml(item) {
         } else if (major.article) {
             images = major.article.covers;
             content = `【专栏】${major.article.title}\n${major.article.desc}`;
+        }
+    }
+    
+    // Handle Forwarded Dynamic
+    if (item.type === 'DYNAMIC_TYPE_FORWARD' && item.orig) {
+        const orig = item.orig;
+        const origAuthor = orig.modules.module_author.name;
+        let origContent = '';
+        let origImages = [];
+        
+        const origDynamic = orig.modules.module_dynamic;
+        if (origDynamic.major) {
+            const major = origDynamic.major;
+            if (major.opus) {
+                origContent = processRichText(major.opus.summary);
+                if (major.opus.pics) origImages = major.opus.pics.map(p => p.url);
+            } else if (major.archive) {
+                origContent = major.archive.desc;
+                origImages = [major.archive.cover];
+                origContent = `【视频】${major.archive.title}\n${origContent}`;
+            } else if (major.draw && major.draw.items) {
+                origImages = major.draw.items.map(i => i.src);
+            } else if (major.article) {
+                origImages = major.article.covers;
+                origContent = `【专栏】${major.article.title}\n${major.article.desc}`;
+            }
+        }
+        if (origDynamic.desc) {
+            origContent = processRichText(origDynamic.desc) + '\n' + origContent;
+        }
+        
+        // Append forwarded content to main content
+        content += `
+            <div class="forward-container" style="background: #f4f5f7; padding: 10px; margin-top: 10px; border-radius: 4px;">
+                <div style="color: #00a1d6; font-weight: bold; margin-bottom: 5px;">@${origAuthor}</div>
+                <div style="color: #666;">${origContent.replace(/\n/g, '<br>')}</div>
+                ${origImages.length > 0 ? `<div style="margin-top: 10px;">[图片 x ${origImages.length}]</div>` : ''}
+            </div>
+        `;
+        
+        // If original has images, we might want to show them too, but for now let's just show the text structure
+        // Or better, merge images if the main dynamic has none? 
+        // Usually forwarded dynamics don't have their own images, they just have text.
+        // But if we want to show the images of the forwarded content, we need to handle it.
+        
+        if (origImages.length > 0) {
+             // Let's render orig images in the forward container
+             let origGridHtml = '';
+             if (origImages.length === 1) {
+                origGridHtml = `<div class="image-grid grid-1" style="margin-top:10px;">
+                    <img src="${origImages[0]}" class="img-item-single" crossorigin="anonymous">
+                </div>`;
+             } else {
+                let gridClass = 'grid-2';
+                if (origImages.length >= 3) gridClass = 'grid-3';
+                origGridHtml = `<div class="image-grid ${gridClass}" style="margin-top:10px;">`;
+                origImages.forEach(img => {
+                    origGridHtml += `<div class="img-item" style="background-image: url('${img}')"></div>`;
+                });
+                origGridHtml += `</div>`;
+             }
+             // Insert into the forward container
+             content = content.replace('[图片 x ' + origImages.length + ']', origGridHtml);
         }
     }
     
@@ -229,6 +315,9 @@ export async function generateDynamicCard(item) {
             type: 'png',
             omitBackground: true
         });
+        
+        // Schedule cleanup after successful generation
+        scheduleBrowserCleanup();
         
         return buffer;
     } catch (error) {
