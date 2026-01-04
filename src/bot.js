@@ -4,7 +4,8 @@ import * as napcat from './napcat.js';
 import { generateDynamicCard } from './image-generator.js';
 
 const POLL_INTERVAL = 30 * 1000; // 30 seconds
-const retryMap = new Map(); // mid -> Set<dynamicId>
+const retryMap = new Map(); // mid -> Map<dynamicId, retryCount>
+const MAX_RETRIES = 3;
 let isFirstRun = true;
 
 function formatMessage(template, variables) {
@@ -246,8 +247,24 @@ async function checkDynamics(user) {
         
         // Check if it's a retry
         let isRetry = false;
-        if (retryMap.has(user.mid) && retryMap.get(user.mid).has(item.id_str)) {
+        let retryCount = 0;
+        
+        if (!retryMap.has(user.mid)) {
+            retryMap.set(user.mid, new Map());
+        }
+        const userRetryMap = retryMap.get(user.mid);
+
+        if (userRetryMap.has(item.id_str)) {
             isRetry = true;
+            retryCount = userRetryMap.get(item.id_str);
+        }
+
+        if (retryCount >= MAX_RETRIES) {
+            console.warn(`Dynamic ${item.id_str} failed ${retryCount} times. Skipping.`);
+            user.lastDynamicId = item.id_str; // Skip this one
+            config.save();
+            userRetryMap.delete(item.id_str);
+            continue;
         }
 
         let msg = await parseDynamic(item, user);
@@ -290,16 +307,11 @@ async function checkDynamics(user) {
                 user.lastDynamicId = item.id_str;
                 config.save(); // Save immediately to prevent duplicate sends on crash/reload
                 // Remove from retryMap
-                if (retryMap.has(user.mid)) {
-                    retryMap.get(user.mid).delete(item.id_str);
-                }
+                userRetryMap.delete(item.id_str);
             } else {
                 console.warn(`Failed to send dynamic ${item.id_str} to any target, will retry next time.`);
-                // Add to retryMap
-                if (!retryMap.has(user.mid)) {
-                    retryMap.set(user.mid, new Set());
-                }
-                retryMap.get(user.mid).add(item.id_str);
+                // Increment retry count
+                userRetryMap.set(item.id_str, retryCount + 1);
                 
                 // Stop processing newer items to maintain order
                 break;

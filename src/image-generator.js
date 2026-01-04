@@ -193,28 +193,44 @@ export async function generateDynamicCard(item) {
     const browser = await getBrowser();
     const page = await browser.newPage();
     
-    // Set viewport with high pixel density for better quality
-    await page.setViewport({
-        width: 600,
-        height: 800,
-        deviceScaleFactor: 3
-    });
-    
-    const html = generateHtml(item);
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-    
-    // Get the height of the card
-    const element = await page.$('#card');
-    const boundingBox = await element.boundingBox();
-    
-    // Screenshot just the card
-    const buffer = await element.screenshot({
-        type: 'png',
-        omitBackground: true
-    });
-    
-    await page.close();
-    return buffer;
+    try {
+        // Set viewport with high pixel density for better quality
+        await page.setViewport({
+            width: 600,
+            height: 800,
+            deviceScaleFactor: 3
+        });
+        
+        const html = generateHtml(item);
+        // Set a timeout for content loading to prevent hanging indefinitely
+        await page.setContent(html, { 
+            waitUntil: 'networkidle0',
+            timeout: 15000 // 15 seconds timeout
+        });
+        
+        // Get the height of the card
+        const element = await page.$('#card');
+        if (!element) {
+            throw new Error('Card element not found');
+        }
+        
+        // Screenshot just the card
+        const buffer = await element.screenshot({
+            type: 'png',
+            omitBackground: true
+        });
+        
+        return buffer;
+    } catch (error) {
+        console.error('Error in generateDynamicCard:', error);
+        throw error;
+    } finally {
+        try {
+            await page.close();
+        } catch (e) {
+            console.error('Error closing page:', e);
+        }
+    }
 }
 
 export async function closeBrowser() {
