@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unia Bot 设置</title>
+    <style>
+        :root {
+            --primary-color: #00a1d6;
+            --bg-color: #f4f5f7;
+            --card-bg: #ffffff;
+            --text-color: #333;
+            --border-color: #e7e7e7;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px 0;
+        }
+        h1 {
+            color: var(--primary-color);
+            margin: 0 0 10px 0;
+            font-size: 2rem;
+        }
+        .back-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            text-decoration: none;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        .back-btn:hover {
+            background: #e7e7e7;
+            color: var(--primary-color);
+        }
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            color: #555;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 0.95rem;
+        }
+        input[type="text"]:focus {
+            border-color: var(--primary-color);
+            outline: none;
+        }
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background-color: #00b5e5;
+        }
+        
+        /* Toast Notification */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+        .toast {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.3s ease;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 200px;
+            justify-content: center;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .toast.success { background: #52c41a; }
+        .toast.error { background: #ff4d4f; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-btn">← 返回主页</a>
+        <header>
+            <h1>Unia Bot 设置</h1>
+        </header>
+
+        <div class="card">
+            <h2>全局配置</h2>
+            <div class="form-group">
+                <label>NapCat HTTP URL</label>
+                <input type="text" id="napcatUrl" placeholder="http://127.0.0.1:3000">
+            </div>
+            <div class="form-group">
+                <label>NapCat WS URL</label>
+                <input type="text" id="napcatWsUrl" placeholder="ws://127.0.0.1:3001">
+            </div>
+            <div class="form-group">
+                <label>NapCat Token</label>
+                <input type="text" id="napcatToken" placeholder="可选">
+            </div>
+            <div style="margin-top: 20px;">
+                <button onclick="saveConfig()">保存配置</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        let config = { users: [] };
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = message;
+            container.appendChild(toast);
+            
+            requestAnimationFrame(() => {
+                toast.classList.add('show');
+            });
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    container.removeChild(toast);
+                }, 300);
+            }, 3000);
+        }
+
+        async function loadConfig() {
+            try {
+                const res = await fetch('/api/config');
+                config = await res.json();
+                
+                document.getElementById('napcatUrl').value = config.napcatUrl || '';
+                document.getElementById('napcatWsUrl').value = config.napcatWsUrl || '';
+                document.getElementById('napcatToken').value = config.napcatToken || '';
+            } catch (err) {
+                showToast('加载配置失败', 'error');
+                console.error(err);
+            }
+        }
+
+        async function saveConfig() {
+            config.napcatUrl = document.getElementById('napcatUrl').value;
+            config.napcatWsUrl = document.getElementById('napcatWsUrl').value;
+            config.napcatToken = document.getElementById('napcatToken').value;
+
+            try {
+                const res = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                if (res.ok) {
+                    showToast('配置已保存', 'success');
+                } else {
+                    showToast('保存失败', 'error');
+                }
+            } catch (err) {
+                showToast('保存失败', 'error');
+                console.error(err);
+            }
+        }
+
+        loadConfig();
+    </script>
+</body>
+</html>

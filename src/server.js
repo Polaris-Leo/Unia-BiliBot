@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { config } from './config.js';
 import * as biliApi from './bili-api.js';
+import * as logger from './logger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -20,6 +21,15 @@ app.post('/api/config', (req, res) => {
     config.data = req.body;
     config.save();
     res.json({ success: true });
+});
+
+app.get('/api/logs', async (req, res) => {
+    try {
+        const logs = await logger.getLogs(200); // Get last 200 logs
+        res.json(logs);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 app.get('/api/qrcode', async (req, res) => {

@@ -31,6 +31,27 @@
             padding: 20px 0;
             position: relative;
         }
+        .nav {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+        .nav a {
+            text-decoration: none;
+            color: #666;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .nav a:hover {
+            background: #e7e7e7;
+        }
+        .nav a.active {
+            background: var(--primary-color);
+            color: white;
+        }
         .user-menu {
             position: absolute;
             top: 20px;
@@ -47,49 +68,84 @@
             cursor: pointer;
             font-size: 0.9rem;
         }
+        .dropdown-menu {
+            position: absolute;
+            top: 120%;
+            right: 0;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            min-width: 160px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 100;
+            padding: 8px 0;
+            border: 1px solid #eee;
+        }
+        .dropdown-menu.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+            top: 100%;
+        }
+        .dropdown-item {
+            padding: 10px 20px;
+            color: #333;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: block;
+            text-decoration: none;
+            font-size: 0.95rem;
+        }
+        .dropdown-item:hover {
+            background: #f4f5f7;
+            color: var(--primary-color);
+        }
+        .dropdown-item.danger {
+            color: #ff4d4f;
+            border-top: 1px solid #eee;
+            margin-top: 4px;
+            padding-top: 12px;
+        }
+        .dropdown-item.danger:hover {
+            background: #fff1f0;
+            color: #ff4d4f;
+        }
         .user-info {
             position: relative;
             cursor: pointer;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
+            padding: 6px 12px;
+            border-radius: 24px;
+            transition: background 0.2s;
+            user-select: none;
+        }
+        .user-info:hover {
+            background: rgba(0,0,0,0.05);
         }
         .user-avatar {
-            width: 32px;
-            height: 32px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
-            border: 1px solid #eee;
+            border: 2px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         .user-name {
-            font-weight: 500;
-            color: #333;
+            font-weight: 600;
+            color: #444;
+            font-size: 0.95rem;
         }
-        .dropdown-menu {
-            position: absolute;
-            top: 100%;
-            right: 0;
-            background: white;
-            border-radius: 4px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            min-width: 120px;
-            display: none;
-            z-index: 100;
-            margin-top: 8px;
+        .dropdown-arrow {
+            font-size: 0.8rem;
+            color: #999;
+            transition: transform 0.2s;
         }
-        .dropdown-menu.show {
-            display: block;
-        }
-        .dropdown-item {
-            padding: 10px 16px;
-            color: #333;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .dropdown-item:hover {
-            background: #f4f5f7;
-        }
-        .dropdown-item.danger {
-            color: #ff4d4f;
+        .user-info.active .dropdown-arrow {
+            transform: rotate(180deg);
         }
         h1 {
             color: var(--primary-color);
@@ -100,15 +156,26 @@
             color: #666;
             margin: 0;
         }
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr;
+        .nav {
+            display: flex;
             gap: 20px;
+            margin-bottom: 20px;
+            justify-content: center;
         }
-        @media (min-width: 850px) {
-            .grid {
-                grid-template-columns: 350px 1fr;
-            }
+        .nav a {
+            text-decoration: none;
+            color: #666;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .nav a:hover {
+            background: #e7e7e7;
+        }
+        .nav a.active {
+            background: var(--primary-color);
+            color: white;
         }
         .card {
             background: var(--card-bg);
@@ -437,36 +504,12 @@
             </div>
         </header>
 
-        <div class="grid">
-            <!-- Left Column: Settings -->
-            <div>
-                <div class="card">
-                    <h2>全局配置</h2>
-                    <div class="form-group">
-                        <label>NapCat HTTP URL</label>
-                        <input type="text" id="napcatUrl" placeholder="http://127.0.0.1:3000">
-                    </div>
-                    <div class="form-group">
-                        <label>NapCat WS URL</label>
-                        <input type="text" id="napcatWsUrl" placeholder="ws://127.0.0.1:3001">
-                    </div>
-                    <div class="form-group">
-                        <label>NapCat Token (可选)</label>
-                        <input type="text" id="napcatToken" placeholder="如果在 NapCat 中设置了 Token">
-                    </div>
-                    <div class="tips">
-                        * 优先使用 WebSocket，失败回退 HTTP<br>
-                        * 请确保 NapCat 已开启对应端口
-                    </div>
-                    <button onclick="saveGlobalConfig()" style="width: 100%; margin-top: 15px;">保存配置</button>
-                </div>
-            </div>
-
-            <!-- Right Column: Monitor List -->
+        <div>
+            <!-- Monitor List -->
             <div>
                 <div class="card">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h2 style="margin: 0;">监控列表</h2>
+                        <h2 style="margin: 0; border: none;">监控列表</h2>
                         <button onclick="openModal()" style="font-size: 0.9rem; padding: 6px 12px;">+ 添加</button>
                     </div>
 
@@ -552,9 +595,6 @@
             try {
                 const res = await fetch('/api/config');
                 config = await res.json();
-                document.getElementById('napcatUrl').value = config.napcatUrl;
-                document.getElementById('napcatWsUrl').value = config.napcatWsUrl || '';
-                document.getElementById('napcatToken').value = config.napcatToken || '';
                 
                 if (config.cookie) {
                     await fetchUserInfo();
@@ -661,23 +701,33 @@
             const menu = document.getElementById('userMenu');
             if (currentUser) {
                 menu.innerHTML = `
-                    <div class="user-info" onclick="toggleDropdown()">
+                    <div class="user-info" onclick="toggleDropdown(this)">
                         <img src="${currentUser.face}" class="user-avatar" referrerpolicy="no-referrer">
                         <span class="user-name">${currentUser.uname}</span>
+                        <span class="dropdown-arrow">▼</span>
                         <div class="dropdown-menu" id="userDropdown">
+                            <a href="/settings.html" class="dropdown-item">全局设置</a>
+                            <a href="/logs.html" class="dropdown-item">事件日志</a>
                             <div class="dropdown-item danger" onclick="logout()">退出登录</div>
                         </div>
                     </div>
                 `;
             } else {
-                menu.innerHTML = `<button class="login-btn" onclick="openLoginModal()">登录 Bilibili</button>`;
+                menu.innerHTML = `
+                    <div style="display: flex; gap: 15px; align-items: center;">
+                        <a href="/settings.html" style="color: #666; text-decoration: none; font-size: 0.9rem;">全局设置</a>
+                        <a href="/logs.html" style="color: #666; text-decoration: none; font-size: 0.9rem;">事件日志</a>
+                        <button class="login-btn" onclick="openLoginModal()">登录 Bilibili</button>
+                    </div>
+                `;
             }
         }
 
-        function toggleDropdown() {
+        function toggleDropdown(element) {
             const dropdown = document.getElementById('userDropdown');
             if (dropdown) {
                 dropdown.classList.toggle('show');
+                if (element) element.classList.toggle('active');
             }
         }
 
@@ -685,11 +735,16 @@
         window.onclick = function(event) {
             if (!event.target.closest('.user-info')) {
                 const dropdowns = document.getElementsByClassName("dropdown-menu");
+                const userInfos = document.getElementsByClassName("user-info");
+                
                 for (let i = 0; i < dropdowns.length; i++) {
                     const openDropdown = dropdowns[i];
                     if (openDropdown.classList.contains('show')) {
                         openDropdown.classList.remove('show');
                     }
+                }
+                for (let i = 0; i < userInfos.length; i++) {
+                    userInfos[i].classList.remove('active');
                 }
             }
             if (event.target.classList.contains('modal-overlay')) {
@@ -769,9 +824,6 @@
         }
 
         async function saveGlobalConfig(showAlert = true) {
-            config.napcatUrl = document.getElementById('napcatUrl').value;
-            config.napcatWsUrl = document.getElementById('napcatWsUrl').value;
-            config.napcatToken = document.getElementById('napcatToken').value;
             await fetch('/api/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

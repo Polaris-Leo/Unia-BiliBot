@@ -1,6 +1,7 @@
 import { config } from './config.js';
 import * as biliApi from './bili-api.js';
 import * as napcat from './napcat.js';
+import * as logger from './logger.js';
 import { generateDynamicCard } from './image-generator.js';
 
 const POLL_INTERVAL = 60 * 1000; // Increased to 60 seconds for performance
@@ -37,6 +38,19 @@ async function checkLiveStatus(user) {
 
     if (isNowLive) {
         // Currently Live
+
+        // Check for stale session data (Bot restart after missed offline event)
+        // Only check if we are NOT currently tracking a disconnection (offlineSince == 0)
+        if (user.isLive && liveInfo.live_time && !user.offlineSince) {
+            const apiLiveStart = liveInfo.live_time * 1000;
+            // If the API says the stream started more than 2 minutes after our recorded start time,
+            // it must be a new session.
+            if (apiLiveStart > user.lastLiveStart + 2 * 60 * 1000) {
+                console.log(`[${new Date().toLocaleString()}] Detected stale session for ${liveInfo.uname}. Resetting status to trigger notification.`);
+                user.isLive = false;
+            }
+        }
+
         if (user.isLive) {
             // Was Live -> Still Live
             if (user.offlineSince) {
@@ -91,17 +105,29 @@ async function checkLiveStatus(user) {
             }
             
             if (user.notifyLiveStart !== false) {
-                console.log(`[${new Date().toLocaleString()}] Sending live start notification for ${liveInfo.uname}`);
-                for (const groupId of user.targetGroups) {
-                    let groupMsg = msg;
-                    if (user.atAllLive) {
-                        groupMsg = `[CQ:at,qq=all]\n${groupMsg}`;
+                const timeSinceStart = Date.now() - user.lastLiveStart;
+                if (timeSinceStart > 10 * 60 * 1000) {
+                    console.log(`[${new Date().toLocaleString()}] Live start notification skipped: started ${Math.round(timeSinceStart/60000)} mins ago (> 10 mins).`);
+                } else {
+                    console.log(`[${new Date().toLocaleString()}] Sending live start notification for ${liveInfo.uname}`);
+                    
+                    logger.logEvent('live_start', user, {
+                        title: liveInfo.title,
+                        roomId: liveInfo.room_id,
+                        msgType: msgType
+                    });
+
+                    for (const groupId of user.targetGroups) {
+                        let groupMsg = msg;
+                        if (user.atAllLive) {
+                            groupMsg = `[CQ:at,qq=all]\n${groupMsg}`;
+                        }
+                        await napcat.sendGroupMsg(groupId, groupMsg);
                     }
-                    await napcat.sendGroupMsg(groupId, groupMsg);
-                }
-                if (user.targetPrivate) {
-                    for (const userId of user.targetPrivate) {
-                        await napcat.sendPrivateMsg(userId, msg);
+                    if (user.targetPrivate) {
+                        for (const userId of user.targetPrivate) {
+                            await napcat.sendPrivateMsg(userId, msg);
+                        }
                     }
                 }
             }
@@ -141,12 +167,21 @@ async function checkLiveStatus(user) {
                     }
                     
                     if (user.notifyLiveEnd !== false) {
-                        for (const groupId of user.targetGroups) {
-                            await napcat.sendGroupMsg(groupId, msg);
-                        }
-                        if (user.targetPrivate) {
-                            for (const userId of user.targetPrivate) {
-                                await napcat.sendPrivateMsg(userId, msg);
+                        const timeSinceEnd = Date.now() - user.lastLiveEnd;
+                        if (timeSinceEnd > 5 * 60 * 1000) {
+                            console.log(`[${new Date().toLocaleString()}] Live end notification skipped: ended ${Math.round(timeSinceEnd/60000)} mins ago (> 5 mins).`);
+                        } else {
+                            logger.logEvent('live_end', user, {
+                                duration: durationStr
+                            });
+
+                            for (const groupId of user.targetGroups) {
+                                await napcat.sendGroupMsg(groupId, msg);
+                            }
+                            if (user.targetPrivate) {
+                                for (const userId of user.targetPrivate) {
+                                    await napcat.sendPrivateMsg(userId, msg);
+                                }
                             }
                         }
                     config.save(); // Save state immediately
@@ -280,6 +315,12 @@ async function checkDynamics(user) {
         }
 
         if (msg) {
+            logger.logEvent('dynamic', user, {
+                id: item.id_str,
+                type: item.type,
+                isRetry
+            });
+
             let sendSuccess = false;
             
             // Send to groups
