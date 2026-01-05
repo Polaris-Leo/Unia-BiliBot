@@ -52,7 +52,13 @@ function scheduleBrowserCleanup() {
 
 function formatTime(timestamp) {
     const date = new Date(timestamp * 1000);
-    return date.toLocaleString('zh-CN', { hour12: false });
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const hour = date.getHours().toString().padStart(2, '0');
+    const minute = date.getMinutes().toString().padStart(2, '0');
+    const second = date.getSeconds().toString().padStart(2, '0');
+    return `${year}/${month}/${day} ${hour}:${minute}:${second}`;
 }
 
 function processRichText(nodeContainer) {
@@ -263,6 +269,8 @@ function generateHtml(item) {
         .time {
             font-size: 12px;
             color: #999;
+            letter-spacing: -0.5px;
+            font-family: sans-serif;
         }
         .content {
             font-size: 15px;
