@@ -75,6 +75,15 @@ app.get('/api/user-info', async (req, res) => {
     res.json(data);
 });
 
+app.post('/api/users-status', async (req, res) => {
+    const { mids } = req.body;
+    if (!Array.isArray(mids) || mids.length === 0) {
+        return res.json({});
+    }
+    const data = await biliApi.getBatchLiveStatus(mids);
+    res.json(data);
+});
+
 export function startServer() {
     app.listen(PORT, () => {
         console.log(`Server running at http://localhost:${PORT}`);

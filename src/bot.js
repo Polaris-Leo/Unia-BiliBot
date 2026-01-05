@@ -449,7 +449,8 @@ export async function startBot() {
         isProcessing = true;
 
         try {
-            const now = new Date().toLocaleString();
+            const date = new Date();
+            const now = `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`;
             const statusSummaries = [];
             
             for (const user of config.data.users) {

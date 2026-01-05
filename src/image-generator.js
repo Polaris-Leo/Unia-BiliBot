@@ -15,6 +15,7 @@ async function getBrowser() {
 
     if (!browser || !browser.isConnected()) {
         if (browser) {
+            console.log('Browser disconnected, closing old instance...');
             try { await browser.close(); } catch (e) {}
         }
         browser = await puppeteer.launch({
@@ -84,7 +85,10 @@ function generateHtml(item) {
     
     const name = author.name;
     const face = author.face;
-    const pubTime = author.pub_time;
+    let pubTime = author.pub_time;
+    if (author.pub_ts) {
+        pubTime = formatTime(author.pub_ts);
+    }
     
     let content = '';
     let images = [];
@@ -225,7 +229,7 @@ function generateHtml(item) {
             margin: 0;
             padding: 20px;
             background: #f4f5f7;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             width: 400px; /* Fixed width for the card */
         }
         .card {
@@ -349,6 +353,7 @@ export async function generateDynamicCard(item) {
         // If we hit a protocol error or timeout, the browser might be in a bad state.
         // Close it so it gets recreated next time.
         if (browser) {
+            console.log('Closing browser due to error to recover memory/state...');
             try {
                 await browser.close();
             } catch (e) {
@@ -374,6 +379,7 @@ export async function closeBrowser() {
         browserIdleTimer = null;
     }
     if (browser) {
+        console.log('Manually closing browser for memory cleanup...');
         await browser.close();
         browser = null;
     }

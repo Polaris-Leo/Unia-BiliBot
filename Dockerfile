@@ -12,7 +12,8 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
       harfbuzz \
       ca-certificates \
       ttf-freefont \
-      font-wqy-zenhei
+      font-wqy-zenhei \
+      font-noto-emoji
 
 # 设置环境变量
 # 1. 跳过 Puppeteer 下载自带的 Chromium (节省 ~170MB)

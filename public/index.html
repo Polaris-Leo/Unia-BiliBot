@@ -196,12 +196,23 @@
         }
         .status-badge {
             display: inline-block;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 0.85rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
             font-weight: 600;
-            background: #eee;
-            color: #666;
+            margin-left: 8px;
+        }
+        .status-live {
+            background: #ff6699;
+            color: white;
+        }
+        .status-offline {
+            background: #f1f2f3;
+            color: #999;
+        }
+        .status-round {
+            background: #00a1d6;
+            color: white;
         }
 
         /* Toast Notification */
@@ -535,6 +546,7 @@
         let config = {};
         let pollTimer = null;
         let currentUser = null;
+        let liveStatusCache = {};
 
         async function loadConfig() {
             try {
@@ -554,8 +566,47 @@
                 
                 // Auto-update missing info
                 refreshMissingUserInfo();
+                
+                // Fetch live status
+                fetchLiveStatus();
             } catch (e) {
                 console.error("Failed to load config", e);
+            }
+        }
+
+        async function fetchLiveStatus() {
+            if (!config.users || config.users.length === 0) return;
+            
+            const mids = config.users.map(u => u.mid);
+            try {
+                const res = await fetch('/api/users-status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mids })
+                });
+                const data = await res.json();
+                
+                // Update Cache
+                liveStatusCache = { ...liveStatusCache, ...data };
+
+                // Update UI
+                config.users.forEach((user, index) => {
+                    const statusInfo = liveStatusCache[user.mid];
+                    const statusEl = document.getElementById(`status-${user.mid}`);
+                    if (statusInfo && statusEl) {
+                        let statusHtml = '';
+                        if (statusInfo.live_status === 1) {
+                            statusHtml = `<span class="status-badge status-live">直播中</span> <span style="font-size: 0.8rem; color: #666;">${statusInfo.title}</span>`;
+                        } else if (statusInfo.live_status === 2) {
+                            statusHtml = `<span class="status-badge status-round">轮播中</span>`;
+                        } else {
+                            statusHtml = `<span class="status-badge status-offline">未开播</span>`;
+                        }
+                        statusEl.innerHTML = statusHtml;
+                    }
+                });
+            } catch (e) {
+                console.error("Failed to fetch live status", e);
             }
         }
 
@@ -781,6 +832,7 @@
                 
                 config.users.push(newUser);
                 renderUsers();
+                fetchLiveStatus();
                 closeModal();
                 await saveUsers(false); // Auto save on add, no alert
                 showToast('添加成功', 'success');
@@ -805,6 +857,19 @@
             const container = document.getElementById('userList');
             container.innerHTML = '';
             config.users.forEach((user, index) => {
+                // Generate status HTML from cache
+                let statusHtml = '';
+                if (liveStatusCache && liveStatusCache[user.mid]) {
+                    const statusInfo = liveStatusCache[user.mid];
+                    if (statusInfo.live_status === 1) {
+                        statusHtml = `<span class="status-badge status-live">直播中</span> <span style="font-size: 0.8rem; color: #666;">${statusInfo.title}</span>`;
+                    } else if (statusInfo.live_status === 2) {
+                        statusHtml = `<span class="status-badge status-round">轮播中</span>`;
+                    } else {
+                        statusHtml = `<span class="status-badge status-offline">未开播</span>`;
+                    }
+                }
+
                 const item = document.createElement('div');
                 item.className = 'user-item';
                 item.innerHTML = `
@@ -812,7 +877,10 @@
                         <div class="user-basic-info">
                             <img src="${user.face || 'https://i0.hdslb.com/bfs/face/member/noface.jpg'}" class="user-face" referrerpolicy="no-referrer">
                             <div class="user-details">
-                                <div class="user-name-display">${user.uname || user.mid}</div>
+                                <div class="user-name-display">
+                                    ${user.uname || user.mid}
+                                    <span id="status-${user.mid}">${statusHtml}</span>
+                                </div>
                                 <div class="user-meta">
                                     <span>UID: ${user.mid}</span>
                                     ${user.roomId ? `<span>直播间: ${user.roomId}</span>` : ''}

@@ -149,6 +149,23 @@ export async function getLiveStatus(mid) {
     }
 }
 
+export async function getBatchLiveStatus(mids) {
+    try {
+        const { data } = await axios.post('https://api.live.bilibili.com/room/v1/Room/get_status_info_by_uids', {
+            uids: mids.map(id => parseInt(id))
+        }, {
+            headers: { 'User-Agent': USER_AGENT }
+        });
+        if (data.code === 0 && data.data) {
+            return data.data;
+        }
+        return {};
+    } catch (error) {
+        console.error('Error fetching batch live status:', error);
+        return {};
+    }
+}
+
 export async function getQRCode() {
     try {
         const { data } = await axios.get('https://passport.bilibili.com/x/passport-login/web/qrcode/generate', {
