@@ -4,7 +4,7 @@ import * as napcat from './napcat.js';
 import * as logger from './logger.js';
 import { generateDynamicCard } from './image-generator.js';
 
-const POLL_INTERVAL = 60 * 1000; // Increased to 60 seconds for performance
+const POLL_INTERVAL = 30 * 1000; // Increased to 60 seconds for performance
 const retryMap = new Map(); // mid -> Map<dynamicId, retryCount>
 const MAX_RETRIES = 3;
 let isFirstRun = true;
