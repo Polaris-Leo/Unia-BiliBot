@@ -98,6 +98,33 @@ function generateHtml(item) {
     
     let content = '';
     let images = [];
+    let customCardHtml = '';
+    let emojiMap = new Map();
+
+    // Helper to collect emojis from rich text nodes to reuse in video title
+    const collectEmojis = (nodeContainer) => {
+        if (!nodeContainer || !nodeContainer.rich_text_nodes) return;
+        nodeContainer.rich_text_nodes.forEach(node => {
+            if (node.type === 'RICH_TEXT_NODE_TYPE_EMOJI' && node.emoji) {
+                emojiMap.set(node.text, node.emoji.icon_url);
+            }
+        });
+    };
+    
+    // Attempt to collect emojis from available dynamic descriptions
+     if (dynamic.desc) collectEmojis(dynamic.desc);
+     if (dynamic.major && dynamic.major.opus) collectEmojis(dynamic.major.opus.summary);
+
+    // Apply emoji replacement to plain text using collected map
+    const replaceEmojis = (text) => {
+        if (!text) return '';
+        let result = text;
+        emojiMap.forEach((url, code) => {
+            const escapedText = code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            result = result.replace(new RegExp(escapedText, 'g'), `<img src="${url}" style="width:20px;height:20px;vertical-align:text-bottom;margin:0 2px;">`);
+        });
+        return result;
+    };
     
     if (dynamic.major) {
         const major = dynamic.major;
@@ -105,9 +132,19 @@ function generateHtml(item) {
             content = processRichText(major.opus.summary);
             if (major.opus.pics) images = major.opus.pics.map(p => p.url);
         } else if (major.archive) {
-            content = major.archive.desc;
-            images = [major.archive.cover];
-            content = `【视频】${major.archive.title}\n${content}`;
+            const archive = major.archive;
+            const duration = archive.duration_text || '';
+            const processedTitle = replaceEmojis(archive.title);
+            
+            customCardHtml = `
+            <div class="video-card">
+                <div class="video-cover" style="background-image: url('${archive.cover}');">
+                    <div class="video-stats-overlay">
+                        <span class="stat-item">${duration ? duration : ''}</span>
+                    </div>
+                </div>
+                <div class="video-title">${processedTitle}</div>
+            </div>`;
         } else if (major.draw && major.draw.items) {
             images = major.draw.items.map(i => i.src);
         } else if (major.article) {
@@ -301,6 +338,67 @@ function generateHtml(item) {
             border-radius: 4px;
             display: block;
         }
+        .video-card {
+            display: block;
+            margin-top: 10px;
+            text-decoration: none;
+            color: inherit;
+            background-color: #f7f8fa; /* Light gray background to distinguish from text */
+            border-radius: 8px;
+            padding: 10px 10px 4px 10px; /* Padding wrapper */
+        }
+        .video-cover {
+            position: relative;
+            width: 100%;
+            height: 0;
+            padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+            background-color: #e7e7e7;
+            background-size: cover;
+            background-position: center;
+            border-radius: 6px; /* All 4 corners rounded */
+            overflow: hidden; /* Ensure content like overlay respects radius */
+        }
+        .video-stats-overlay {
+            position: absolute;
+            bottom: 6px;
+            left: 6px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            background: rgba(0,0,0,0.5);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .video-cover::after {
+            content: '';
+            position: absolute;
+            right: 10px;
+            bottom: 10px;
+            width: 40px;
+            height: 40px;
+            background: url("data:image/svg+xml,%3Csvg viewBox='0 0 1024 1024' version='1.1' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M830.577778 227.555556H657.066667l74.903703-70.162963c11.377778-11.377778 11.377778-29.392593 0-39.822223-5.688889-5.688889-13.274074-8.533333-21.807407-8.533333-7.585185 0-15.17037 2.844444-21.807407 8.533333L570.785185 227.555556H456.059259L338.488889 117.57037c-5.688889-5.688889-13.274074-8.533333-21.807408-8.533333-7.585185 0-15.17037 2.844444-21.807407 8.533333-11.377778 11.377778-11.377778 29.392593 0 39.822223L369.777778 227.555556H193.422222C117.57037 227.555556 56.888889 295.822222 56.888889 381.155556v332.8c0 85.333333 60.681481 153.6 136.533333 153.6h42.666667c0 25.6 22.755556 47.407407 50.251852 47.407407s50.251852-20.859259 50.251852-47.407407h353.659259c0 25.6 22.755556 47.407407 50.251852 47.407407s50.251852-20.859259 50.251852-47.407407h38.874074c75.851852 0 136.533333-69.214815 136.533333-153.6V381.155556c0.948148-85.333333-59.733333-153.6-135.585185-153.6zM698.785185 574.577778L425.718519 733.866667c-22.755556 13.274074-41.718519 2.844444-41.718519-24.651852V389.688889c0-26.548148 18.962963-37.925926 41.718519-24.651852l273.066666 160.237037c22.755556 14.222222 22.755556 35.081481 0 49.303704z' fill='white'%3E%3C/path%3E%3C/svg%3E") no-repeat center center;
+            background-size: contain;
+            opacity: 0.9;
+            filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+        }
+        .video-title {
+            margin-top: 8px;
+            margin-bottom: 6px;
+            padding: 0 2px;
+            font-size: 15px;
+            color: #212121;
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            font-weight: 500;
+        }
+        .stat-item {
+            margin-right: 0;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
@@ -313,6 +411,7 @@ function generateHtml(item) {
             </div>
         </div>
         <div class="content">${content}</div>
+        ${customCardHtml}
         ${imageGridHtml}
     </div>
 </body>

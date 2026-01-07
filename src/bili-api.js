@@ -102,6 +102,32 @@ export async function getSpaceDynamics(host_mid, cookie = '') {
     }
 }
 
+export async function getDynamicDetail(id, cookie = '') {
+    const keys = await getWbiKeys(cookie);
+    if (!keys) return null;
+
+    const params = {
+        id: id,
+        features: 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote,forwardListHidden,decorationCard,commentsNewVersion,onlyfansAssetsV2,ugcDelete,onlyfansQaCard'
+    };
+
+    const signedParams = encWbi(params, keys.img_key, keys.sub_key);
+
+    try {
+        const { data } = await axios.get('https://api.bilibili.com/x/polymer/web-dynamic/v1/detail', {
+            params: signedParams,
+            headers: {
+                'User-Agent': USER_AGENT,
+                'Cookie': cookie
+            }
+        });
+        return data;
+    } catch (error) {
+        console.error('Error fetching dynamic detail:', error);
+        return null;
+    }
+}
+
 export async function getRoomInfo(room_id) {
     try {
         const { data } = await axios.get('https://api.live.bilibili.com/room/v1/Room/get_info', {
