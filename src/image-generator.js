@@ -63,26 +63,25 @@ function formatTime(timestamp) {
 
 function processRichText(nodeContainer) {
     if (!nodeContainer) return '';
-    let text = nodeContainer.text || '';
-    if (nodeContainer.rich_text_nodes) {
-        nodeContainer.rich_text_nodes.forEach(node => {
+    
+    // 优先使用 rich_text_nodes 进行精确拼接，解决替换可能导致的错误匹配和空格问题
+    if (nodeContainer.rich_text_nodes && nodeContainer.rich_text_nodes.length > 0) {
+        return nodeContainer.rich_text_nodes.map(node => {
             if (node.type === 'RICH_TEXT_NODE_TYPE_EMOJI' && node.emoji) {
-                const emojiText = node.text;
-                const emojiUrl = node.emoji.icon_url;
-                const escapedText = emojiText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                text = text.replace(new RegExp(escapedText, 'g'), `<img src="${emojiUrl}" style="width:20px;height:20px;vertical-align:text-bottom;margin:0 2px;">`);
+                return `<img src="${node.emoji.icon_url}" style="width:20px;height:20px;vertical-align:text-bottom;margin:0 1px;">`;
             } else if (node.type === 'RICH_TEXT_NODE_TYPE_AT') {
-                const atText = node.text;
-                const escapedText = atText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                text = text.replace(new RegExp(escapedText, 'g'), `<span style="color: #00a1d6;">${atText}</span>`);
+                return `<span style="color: #00a1d6;">${node.text}</span>`;
             } else if (node.type === 'RICH_TEXT_NODE_TYPE_TOPIC') {
-                const topicText = node.text;
-                const escapedText = topicText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                text = text.replace(new RegExp(escapedText, 'g'), `<span style="color: #00a1d6;">${topicText}</span>`);
+                return `<span style="color: #00a1d6;">${node.text}</span>`;
+            } else {
+                // RICH_TEXT_NODE_TYPE_TEXT 和其他类型直接返回文本
+                return node.text;
             }
-        });
+        }).join('');
     }
-    return text;
+
+    // Fallback: 仅有 text 的情况（通常不会发生，或者是旧版数据）
+    return nodeContainer.text || '';
 }
 
 function generateHtml(item) {
@@ -121,7 +120,7 @@ function generateHtml(item) {
         let result = text;
         emojiMap.forEach((url, code) => {
             const escapedText = code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            result = result.replace(new RegExp(escapedText, 'g'), `<img src="${url}" style="width:20px;height:20px;vertical-align:text-bottom;margin:0 2px;">`);
+            result = result.replace(new RegExp(escapedText, 'g'), `<img src="${url}" style="width:20px;height:20px;vertical-align:text-bottom;margin:0 1px;">`);
         });
         return result;
     };
