@@ -100,7 +100,7 @@ async function checkLiveStatus(user) {
                 if (msgType === 'resume') {
                     msg = `${liveInfo.uname} 已重新开播！【${liveInfo.title}】\nhttps://live.bilibili.com/${liveInfo.room_id}\n[CQ:image,file=${liveInfo.cover_from_user}]`;
                 } else {
-                    msg = `${liveInfo.uname} 开播啦！【${liveInfo.title}】\nhttps://live.bilibili.com/${liveInfo.room_id}\n[CQ:image,file=${liveInfo.cover_from_user}]`;
+                    msg = `${liveInfo.uname} 开播啦！\n『${liveInfo.title}』\nhttps://live.bilibili.com/${liveInfo.room_id}\n[CQ:image,file=${liveInfo.cover_from_user}]`;
                 }
             }
             
