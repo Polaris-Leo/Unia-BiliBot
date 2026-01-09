@@ -11,8 +11,9 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
       freetype \
       harfbuzz \
       ca-certificates \
-      ttf-freefont \
       font-wqy-zenhei \
+      font-noto \
+      font-noto-cjk \
       font-noto-emoji
 
 # 设置环境变量

@@ -271,7 +271,7 @@ function generateHtml(item) {
             margin: 0;
             padding: 20px;
             background: #f4f5f7;
-            font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             width: 400px; /* Fixed width for the card */
         }
         .card {
