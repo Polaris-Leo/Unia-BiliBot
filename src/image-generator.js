@@ -271,7 +271,7 @@ function generateHtml(item) {
             margin: 0;
             padding: 20px;
             background: #f4f5f7;
-            font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Roboto", "Noto Sans", "Helvetica Neue", "Arial", "Noto Sans CJK SC", "Noto Sans SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             width: 400px; /* Fixed width for the card */
         }
         .card {
@@ -306,7 +306,6 @@ function generateHtml(item) {
             font-size: 12px;
             color: #999;
             letter-spacing: -0.5px;
-            font-family: sans-serif;
         }
         .content {
             font-size: 15px;
