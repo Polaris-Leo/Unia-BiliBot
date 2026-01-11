@@ -208,9 +208,9 @@ function generateHtml(item) {
 
         // Append forwarded content to main content
         content += `
-            <div class="forward-container" style="background: #f7f8fa; padding: 10px 12px; margin-top: 8px; border-radius: 6px;">
+            <div class="forward-container">
                 <div style="color: #00a1d6; font-weight: bold; margin-bottom: 6px; font-size: 14px;">@${origAuthor}</div>
-                <div style="color: #333; line-height: 1.5; font-size: 14px; white-space: pre-wrap;">${origContent}</div>
+                <div class="forward-content" style="color: #333; line-height: 1.5; font-size: 14px; white-space: pre-wrap;">${origContent}</div>
                 ${origImages.length > 0 ? `<div style="margin-top: 8px;">[图片 x ${origImages.length}]</div>` : ''}
             </div>
         `;
@@ -308,12 +308,15 @@ function generateHtml(item) {
             letter-spacing: -0.5px;
             font-family: Arial, sans-serif;
         }
-        .content {
-            font-size: 15px;
-            color: #333;
-            line-height: 1.5;
-            margin-bottom: 10px;
-            word-wrap: break-word;
+        .forward-container {
+            background: #f7f8fa;
+            padding: 10px 12px;
+            margin-top: 8px;
+            border-radius: 6px;
+            font-family: Arial, "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif, "Noto Sans CJK SC", "WenQuanYi Zen Hei", "Microsoft YaHei";
+        }
+        .content, .forward-content {
+            font-family: Arial, "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif, "Noto Sans CJK SC", "WenQuanYi Zen Hei", "Microsoft YaHei";
         }
         .image-grid {
             display: grid;
