@@ -72,7 +72,8 @@ function processRichText(nodeContainer) {
             } else if (node.type === 'RICH_TEXT_NODE_TYPE_AT') {
                 return `<span style="color: #00a1d6;">${node.text}</span>`;
             } else if (node.type === 'RICH_TEXT_NODE_TYPE_TOPIC') {
-                return `<span style="color: #00a1d6;">${node.text}</span>`;
+                const topicText = node.text.replace(/^#+|#+$/g, '');
+                return `<span style="color: #00a1d6;">#${topicText}#</span>`;
             } else {
                 // RICH_TEXT_NODE_TYPE_TEXT 和其他类型直接返回文本
                 return node.text;
@@ -271,7 +272,9 @@ function generateHtml(item) {
             margin: 0;
             padding: 20px;
             background: #f4f5f7;
-            font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", Arial, sans-serif, "Noto Sans CJK SC", "WenQuanYi Zen Hei", "Microsoft YaHei";
+            /* 调整字体顺序：标准英文字体 -> sans-serif -> Emoji字体 -> 中文字体 */
+            /* 将 sans-serif 放在 Emoji 之前是关键，防止 Emoji 字体抢占数字和符号 */
+            font-family: "DejaVu Sans", "Arial", "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Noto Sans CJK SC", "WenQuanYi Zen Hei", "Microsoft YaHei";
             width: 400px; /* Fixed width for the card */
         }
         .card {
@@ -306,17 +309,27 @@ function generateHtml(item) {
             font-size: 12px;
             color: #999;
             letter-spacing: -0.5px;
-            font-family: Arial, sans-serif;
+            /* 时间仅使用标准字体，禁用 Emoji 字体以防干扰 */
+            font-family: "DejaVu Sans", "Arial", sans-serif;
+        }
+        .content {
+            font-size: 15px;
+            color: #333;
+            line-height: 1.5;
+            margin-bottom: 10px;
+            word-wrap: break-word;
+        }
+        .content, .forward-content {
+             /* 内容区域：标准字体 -> Emoji -> 中文 */
+             font-family: "DejaVu Sans", "Arial", "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Noto Sans CJK SC", "WenQuanYi Zen Hei", "Microsoft YaHei";
         }
         .forward-container {
             background: #f7f8fa;
             padding: 10px 12px;
             margin-top: 8px;
             border-radius: 6px;
-            font-family: Arial, "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif, "Noto Sans CJK SC", "WenQuanYi Zen Hei", "Microsoft YaHei";
-        }
-        .content, .forward-content {
-            font-family: Arial, "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif, "Noto Sans CJK SC", "WenQuanYi Zen Hei", "Microsoft YaHei";
+            /* 转发区域：标准字体 -> Emoji -> 中文 */
+            font-family: "DejaVu Sans", "Arial", "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Noto Sans CJK SC", "WenQuanYi Zen Hei", "Microsoft YaHei";
         }
         .image-grid {
             display: grid;
@@ -400,6 +413,8 @@ function generateHtml(item) {
         .stat-item {
             margin-right: 0;
             font-weight: 500;
+            /* 视频时长仅使用标准字体 */
+            font-family: "DejaVu Sans", "Arial", sans-serif;
         }
     </style>
 </head>

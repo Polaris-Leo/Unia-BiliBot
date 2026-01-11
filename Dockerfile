@@ -14,7 +14,8 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
       font-wqy-zenhei \
       font-noto \
       font-noto-cjk \
-      font-noto-emoji
+      font-noto-emoji \
+      ttf-dejavu
 
 # 设置环境变量
 # 1. 跳过 Puppeteer 下载自带的 Chromium (节省 ~170MB)
@@ -28,6 +29,10 @@ COPY package*.json ./
 
 # 安装依赖
 RUN npm install --production
+
+# 刷新字体缓存，确保新安装的字体被系统识别
+# 这对于解决字体回退问题至关重要
+RUN fc-cache -f -v
 
 COPY . .
 
