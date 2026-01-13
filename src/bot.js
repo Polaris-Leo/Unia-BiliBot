@@ -84,7 +84,7 @@ async function checkLiveStatus(user) {
 
             user.offlineSince = 0;
             
-            let msg = '';
+            let defaultMsg = '';
             const variables = {
                 name: liveInfo.uname,
                 title: liveInfo.title,
@@ -94,13 +94,13 @@ async function checkLiveStatus(user) {
             };
 
             if (user.liveStartMsg) {
-                msg = formatMessage(user.liveStartMsg, variables);
+                defaultMsg = formatMessage(user.liveStartMsg, variables);
             } else {
                 // Default format
                 if (msgType === 'resume') {
-                    msg = `${liveInfo.uname} 已重新开播！【${liveInfo.title}】\nhttps://live.bilibili.com/${liveInfo.room_id}\n[CQ:image,file=${liveInfo.cover_from_user}]`;
+                    defaultMsg = `${liveInfo.uname} 已重新开播！【${liveInfo.title}】\nhttps://live.bilibili.com/${liveInfo.room_id}\n[CQ:image,file=${liveInfo.cover_from_user}]`;
                 } else {
-                    msg = `${liveInfo.uname} 开播啦！\n『${liveInfo.title}』\nhttps://live.bilibili.com/${liveInfo.room_id}\n[CQ:image,file=${liveInfo.cover_from_user}]`;
+                    defaultMsg = `${liveInfo.uname} 开播啦！\n『${liveInfo.title}』\nhttps://live.bilibili.com/${liveInfo.room_id}\n[CQ:image,file=${liveInfo.cover_from_user}]`;
                 }
             }
             
@@ -117,16 +117,43 @@ async function checkLiveStatus(user) {
                         msgType: msgType
                     });
 
-                    for (const groupId of user.targetGroups) {
-                        let groupMsg = msg;
-                        if (user.atAllLive) {
-                            groupMsg = `[CQ:at,qq=all]\n${groupMsg}`;
+                    const sendToTarget = async (target, type) => {
+                        const isObj = typeof target === 'object';
+                        const config = isObj ? target : { id: target };
+                        
+                        // Check override toggle
+                        if (config.monitorLive === false) return; // explicit disable
+                        if (config.monitorLiveStart === false) return; // New explicit disable for start
+                        
+                        // Determine Msg
+                        let msg = defaultMsg;
+                        if (config.liveStartMsg) {
+                            msg = formatMessage(config.liveStartMsg, variables);
                         }
-                        await napcat.sendGroupMsg(groupId, groupMsg);
+
+                        // Determine At All
+                        let atAll = false;
+                        if (type === 'group') {
+                            atAll = isObj ? (config.atAllLive) : user.atAllLive;
+                        }
+
+                        if (atAll) {
+                            msg = `[CQ:at,qq=all]\n${msg}`;
+                        }
+
+                        if (type === 'group') {
+                            await napcat.sendGroupMsg(config.id, msg);
+                        } else {
+                            await napcat.sendPrivateMsg(config.id, msg);
+                        }
+                    };
+
+                    for (const group of user.targetGroups) {
+                        await sendToTarget(group, 'group');
                     }
                     if (user.targetPrivate) {
                         for (const userId of user.targetPrivate) {
-                            await napcat.sendPrivateMsg(userId, msg);
+                            await sendToTarget(userId, 'private');
                         }
                     }
                 }
@@ -154,16 +181,16 @@ async function checkLiveStatus(user) {
                     const duration = user.lastLiveStart ? (user.lastLiveEnd - user.lastLiveStart) : 0;
                     const durationStr = formatDuration(duration);
                     
-                    let msg = '';
+                    let defaultMsg = '';
                     const variables = {
                         name: liveInfo.uname,
                         duration: durationStr
                     };
 
                     if (user.liveEndMsg) {
-                        msg = formatMessage(user.liveEndMsg, variables);
+                        defaultMsg = formatMessage(user.liveEndMsg, variables);
                     } else {
-                        msg = `${liveInfo.uname} 下播了。\n本次直播时长：${durationStr}`;
+                        defaultMsg = `${liveInfo.uname} 下播了。\n本次直播时长：${durationStr}`;
                     }
                     
                     if (user.notifyLiveEnd !== false) {
@@ -175,12 +202,30 @@ async function checkLiveStatus(user) {
                                 duration: durationStr
                             });
 
-                            for (const groupId of user.targetGroups) {
-                                await napcat.sendGroupMsg(groupId, msg);
+                            const sendToTarget = async (target, type) => {
+                                const isObj = typeof target === 'object';
+                                const config = isObj ? target : { id: target };
+                                if (config.monitorLiveEnd === false) return; // New explicit disable for end
+                                if (config.monitorLive === false) return; 
+
+                                let msg = defaultMsg;
+                                if (config.liveEndMsg) {
+                                    msg = formatMessage(config.liveEndMsg, variables);
+                                }
+                                
+                                if (type === 'group') {
+                                    await napcat.sendGroupMsg(config.id, msg);
+                                } else {
+                                    await napcat.sendPrivateMsg(config.id, msg);
+                                }
+                            };
+
+                            for (const group of user.targetGroups) {
+                                await sendToTarget(group, 'group');
                             }
                             if (user.targetPrivate) {
                                 for (const userId of user.targetPrivate) {
-                                    await napcat.sendPrivateMsg(userId, msg);
+                                    await sendToTarget(userId, 'private');
                                 }
                             }
                         }
@@ -227,45 +272,17 @@ async function checkDynamics(user) {
 
     const latest = items[0];
     const latestId = latest.id_str;
-
+    let isHistory = false;
     if (!user.lastDynamicId) {
-        // First run
-        if (user.notifyMissed) {
-            // If notifyMissed is enabled, process the latest dynamic
-            // We treat the latest one as "new"
-            // Note: We only take the latest one to avoid spamming if there are multiple "missed" ones
-            // or we could take all? Let's stick to latest for safety.
-            // Actually, items[0] is the latest.
-            // We need to set lastDynamicId to the one *before* it to trigger the loop?
-            // No, we can just manually push it to newItems and let the loop handle it.
-            // But we need to be careful about setting lastDynamicId.
-            
-            // Let's just pretend lastDynamicId was the one before the latest (if exists)
-            // or just 0.
-            // But if we set it to 0, we might get 12 items.
-            // Let's just push the latest item to newItems and set lastDynamicId to the one before it (or 0)
-            // effectively.
-            
-            // Simpler approach:
-            // Just add the latest item to newItems list directly.
-            // And ensure we don't return early.
-            
-            // But wait, the loop below filters based on lastDynamicId.
-            // So we need to set lastDynamicId to something smaller than latestId.
-            // If items has > 1 element, use items[1].id_str.
-            // If items has 1 element, use 0.
-            
-            if (items.length > 1) {
-                user.lastDynamicId = items[1].id_str;
-            } else {
-                user.lastDynamicId = '0';
-            }
-            // Now the logic below will pick up items[0] (and maybe others if we set it to 0)
-            // If we set it to items[1].id_str, it will pick up items[0].
+        // First run logic (History detection)
+        isHistory = true;
+        
+        // Always prepare to process so per-target settings can decide
+        // Set lastDynamicId to the second latest item (or 0) so the loop picks up the latest item.
+        if (items.length > 1) {
+            user.lastDynamicId = items[1].id_str;
         } else {
-            // Default behavior: just save the latest ID and silent
-            user.lastDynamicId = latestId;
-            return;
+            user.lastDynamicId = '0';
         }
     }
 
@@ -309,12 +326,14 @@ async function checkDynamics(user) {
             continue;
         }
 
-        let msg = await parseDynamic(item, user);
+        // We get the variables and fallback message
+        let { msg: defaultMsg, variables } = await parseDynamic(item, user); 
+        
         if (isRetry) {
-            msg = '<补发>\n' + msg;
+             defaultMsg = '<补发>\n' + defaultMsg;
         }
 
-        if (msg) {
+        if (defaultMsg) {
             logger.logEvent('dynamic', user, {
                 id: item.id_str,
                 type: item.type,
@@ -323,29 +342,64 @@ async function checkDynamics(user) {
 
             let sendSuccess = false;
             
-            // Send to groups
-            for (const groupId of user.targetGroups) {
-                let groupMsg = msg;
-                if (user.atAllDynamic) {
-                    groupMsg = `[CQ:at,qq=all]\n${groupMsg}`;
+            const sendToTarget = async (target, type) => {
+                const isObj = typeof target === 'object';
+                const config = isObj ? target : { id: target };
+                
+                if (config.monitorDynamic === false) return;
+
+                // Determine Msg
+                let msg = defaultMsg;
+                // Check detailed override (e.g. video vs article)
+                // This is getting complex because parseDynamic handled fallback logic based on type.
+                // We should probably allow `parseDynamic` to take an override config.
+                // Or simplification: Just check `dynamicMsg` override on target.
+                // If user wants specific video/article overrides per group, that's very detailed. 
+                // Let's assume `dynamicMsg` is the main override for now, or re-parse.
+                
+                // Let's re-parse if we detect any override key in config
+                if (config.dynamicMsg || config.dynamicMsg_forward || config.dynamicMsg_video || config.dynamicMsg_article) {
+                     const res = await parseDynamic(item, config); // Pass config as "user" context to use its templates
+                     msg = res.msg;
+                     if (isRetry) msg = '<补发>\n' + msg;
                 }
+
+                let atAll = false;
+                if (type === 'group') {
+                    atAll = isObj ? (config.atAllDynamic) : user.atAllDynamic;
+                }
+
+                if (atAll) {
+                    msg = `[CQ:at,qq=all]\n${msg}`;
+                }
+
+                // History filter
+                if (isHistory) {
+                    const wantsHistory = config.monitorHistory !== undefined ? config.monitorHistory : user.notifyMissed;
+                    if (!wantsHistory) return;
+                }
+
                 try {
-                    await napcat.sendGroupMsg(groupId, groupMsg);
+                    if (type === 'group') {
+                        await napcat.sendGroupMsg(config.id, msg);
+                    } else {
+                        await napcat.sendPrivateMsg(config.id, msg);
+                    }
                     sendSuccess = true;
                 } catch (e) {
-                    console.error(`Failed to send dynamic to group ${groupId}:`, e.message);
+                    console.error(`Failed to send dynamic to ${type} ${config.id}:`, e.message);
                 }
+            };
+            
+            // Send to groups
+            for (const group of user.targetGroups) {
+                await sendToTarget(group, 'group');
             }
             
             // Send to private
             if (user.targetPrivate) {
                 for (const userId of user.targetPrivate) {
-                    try {
-                        await napcat.sendPrivateMsg(userId, msg);
-                        sendSuccess = true;
-                    } catch (e) {
-                        console.error(`Failed to send dynamic to private ${userId}:`, e.message);
-                    }
+                   await sendToTarget(userId, 'private');
                 }
             }
 
@@ -367,6 +421,7 @@ async function checkDynamics(user) {
         }
     }
     
+// Note: We need to modify parseDynamic to return variables too
     // Note: We no longer update user.lastDynamicId = latestId at the end
     // It is updated incrementally inside the loop upon success
 }
@@ -431,24 +486,24 @@ async function parseDynamic(item, user) {
 
     // Select specific template based on type
     if (item.type === 'DYNAMIC_TYPE_FORWARD' && user.dynamicMsg_forward) {
-        template = user.dynamicMsg_forward;
+         template = user.dynamicMsg_forward;
     } else if (dynamicModule.major) {
         const major = dynamicModule.major;
         if (major.archive && user.dynamicMsg_video) {
-            template = user.dynamicMsg_video;
+             template = user.dynamicMsg_video;
         } else if (major.article && user.dynamicMsg_article) {
-            template = user.dynamicMsg_article;
+             template = user.dynamicMsg_article;
         }
     }
 
-    if (user && template) {
+    if (template) {
         msg = formatMessage(template, variables);
     } else {
         // Default format
         msg = `${author} ${actionText}\n${jumpUrl}\n${imageCQ}`;
     }
 
-    return msg;
+    return { msg, variables };
 }
 
 function formatDuration(ms) {
