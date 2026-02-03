@@ -93,12 +93,15 @@ async function checkLiveStatus(user) {
                 cover: `[CQ:image,file=${liveInfo.cover_from_user}]`
             };
 
-            if (user.liveStartMsg) {
-                defaultMsg = formatMessage(user.liveStartMsg, variables);
-            } else {
-                // Default format
-                if (msgType === 'resume') {
+            if (msgType === 'resume') {
+                if (user.liveResumeMsg) {
+                    defaultMsg = formatMessage(user.liveResumeMsg, variables);
+                } else {
                     defaultMsg = `${liveInfo.uname} 已重新开播！【${liveInfo.title}】\nhttps://live.bilibili.com/${liveInfo.room_id}\n[CQ:image,file=${liveInfo.cover_from_user}]`;
+                }
+            } else {
+                if (user.liveStartMsg) {
+                    defaultMsg = formatMessage(user.liveStartMsg, variables);
                 } else {
                     defaultMsg = `${liveInfo.uname} 开播啦！\n『${liveInfo.title}』\nhttps://live.bilibili.com/${liveInfo.room_id}\n[CQ:image,file=${liveInfo.cover_from_user}]`;
                 }
@@ -127,8 +130,14 @@ async function checkLiveStatus(user) {
                         
                         // Determine Msg
                         let msg = defaultMsg;
-                        if (config.liveStartMsg) {
-                            msg = formatMessage(config.liveStartMsg, variables);
+                        if (msgType === 'resume') {
+                            if (config.liveResumeMsg) {
+                                msg = formatMessage(config.liveResumeMsg, variables);
+                            }
+                        } else {
+                            if (config.liveStartMsg) {
+                                msg = formatMessage(config.liveStartMsg, variables);
+                            }
                         }
 
                         // Determine At All
