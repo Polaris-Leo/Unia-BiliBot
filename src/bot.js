@@ -109,7 +109,15 @@ async function checkLiveStatus(user) {
             
             if (user.notifyLiveStart !== false) {
                 const timeSinceStart = Date.now() - user.lastLiveStart;
-                if (timeSinceStart > 10 * 60 * 1000) {
+                
+                // Only enforce the 10-minute rule for FRESH starts.
+                // Resumes should always notify because the "resume event" just happened.
+                let shouldNotify = true;
+                if (msgType === 'start' && timeSinceStart > 10 * 60 * 1000) {
+                    shouldNotify = false;
+                }
+
+                if (!shouldNotify) {
                     console.log(`[${new Date().toLocaleString()}] Live start notification skipped: started ${Math.round(timeSinceStart/60000)} mins ago (> 10 mins).`);
                 } else {
                     console.log(`[${new Date().toLocaleString()}] Sending live start notification for ${liveInfo.uname}`);
@@ -150,10 +158,14 @@ async function checkLiveStatus(user) {
                             msg = `[CQ:at,qq=all]\n${msg}`;
                         }
 
-                        if (type === 'group') {
-                            await napcat.sendGroupMsg(config.id, msg);
-                        } else {
-                            await napcat.sendPrivateMsg(config.id, msg);
+                        try {
+                            if (type === 'group') {
+                                await napcat.sendGroupMsg(config.id, msg);
+                            } else {
+                                await napcat.sendPrivateMsg(config.id, msg);
+                            }
+                        } catch (e) {
+                            console.error(`Failed to send live start notification to ${type} ${config.id}:`, e.message);
                         }
                     };
 
@@ -222,10 +234,14 @@ async function checkLiveStatus(user) {
                                     msg = formatMessage(config.liveEndMsg, variables);
                                 }
                                 
-                                if (type === 'group') {
-                                    await napcat.sendGroupMsg(config.id, msg);
-                                } else {
-                                    await napcat.sendPrivateMsg(config.id, msg);
+                                try {
+                                    if (type === 'group') {
+                                        await napcat.sendGroupMsg(config.id, msg);
+                                    } else {
+                                        await napcat.sendPrivateMsg(config.id, msg);
+                                    }
+                                } catch (e) {
+                                    console.error(`Failed to send live end notification to ${type} ${config.id}:`, e.message);
                                 }
                             };
 
