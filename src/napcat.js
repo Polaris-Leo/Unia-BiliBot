@@ -56,6 +56,38 @@ function connectWs() {
     });
 }
 
+// Simple Request Queue to prevent rate limiting / message swallowing
+const msgQueue = [];
+let isQueueProcessing = false;
+const RATE_LIMIT_DELAY = 2000; // 2 seconds between messages
+
+async function processQueue() {
+    if (isQueueProcessing) return;
+    isQueueProcessing = true;
+
+    while (msgQueue.length > 0) {
+        const { task, resolve, reject } = msgQueue.shift();
+        try {
+            await task();
+            resolve();
+        } catch (e) {
+            reject(e);
+        }
+        // Wait before processing next
+        if (msgQueue.length > 0) {
+            await new Promise(r => setTimeout(r, RATE_LIMIT_DELAY));
+        }
+    }
+    isQueueProcessing = false;
+}
+
+function enqueue(task) {
+    return new Promise((resolve, reject) => {
+        msgQueue.push({ task, resolve, reject });
+        processQueue();
+    });
+}
+
 function scheduleReconnect() {
     if (reconnectTimer) return;
     console.log('Scheduling WS reconnect in 5s...');
@@ -99,45 +131,49 @@ async function sendHttp(action, params) {
 }
 
 export async function sendGroupMsg(group_id, message) {
-    const params = { group_id, message };
-    
-    // Try WS first
-    if (isConnected) {
-        try {
-            await sendWs('send_group_msg', params);
-            return;
-        } catch (err) {
-            console.error('WS send failed, falling back to HTTP:', err.message);
+    return enqueue(async () => {
+        const params = { group_id, message };
+        
+        // Try WS first
+        if (isConnected) {
+            try {
+                await sendWs('send_group_msg', params);
+                return;
+            } catch (err) {
+                console.error('WS send failed, falling back to HTTP:', err.message);
+            }
         }
-    }
 
-    // Fallback to HTTP
-    try {
-        await sendHttp('send_group_msg', params);
-    } catch (error) {
-        console.error(`Failed to send group message to ${group_id} (HTTP):`, error.message);
-        throw error; // Re-throw to let caller know it failed
-    }
+        // Fallback to HTTP
+        try {
+            await sendHttp('send_group_msg', params);
+        } catch (error) {
+            console.error(`Failed to send group message to ${group_id} (HTTP):`, error.message);
+            throw error; // Re-throw to let caller know it failed
+        }
+    });
 }
 
 export async function sendPrivateMsg(user_id, message) {
-    const params = { user_id, message };
+    return enqueue(async () => {
+        const params = { user_id, message };
 
-    // Try WS first
-    if (isConnected) {
-        try {
-            await sendWs('send_private_msg', params);
-            return;
-        } catch (err) {
-            console.error('WS send failed, falling back to HTTP:', err.message);
+        // Try WS first
+        if (isConnected) {
+            try {
+                await sendWs('send_private_msg', params);
+                return;
+            } catch (err) {
+                console.error('WS send failed, falling back to HTTP:', err.message);
+            }
         }
-    }
 
-    // Fallback to HTTP
-    try {
-        await sendHttp('send_private_msg', params);
-    } catch (error) {
-        console.error(`Failed to send private message to ${user_id} (HTTP):`, error.message);
-        throw error; // Re-throw to let caller know it failed
-    }
+        // Fallback to HTTP
+        try {
+            await sendHttp('send_private_msg', params);
+        } catch (error) {
+            console.error(`Failed to send private message to ${user_id} (HTTP):`, error.message);
+            throw error; // Re-throw to let caller know it failed
+        }
+    });
 }

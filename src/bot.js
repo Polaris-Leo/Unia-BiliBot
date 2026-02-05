@@ -489,11 +489,13 @@ async function parseDynamic(item, user) {
     let imageCQ = '';
 
     try {
-        const imageBuffer = await generateDynamicCard(item);
+        // Add timeout protection for image generation (60s)
+        // If server is slow, this fails fast and falls back to simple mode
+        const imageBuffer = await withTimeout(generateDynamicCard(item), 120000);
         const base64 = imageBuffer.toString('base64');
         imageCQ = `[CQ:image,file=base64://${base64}]`;
     } catch (error) {
-        console.error('Error generating dynamic card:', error);
+        console.error(`Error generating dynamic card (author: ${author}):`, error.message);
         // Fallback to first image if generation fails
         if (images.length > 0) {
             imageCQ = `[CQ:image,file=${images[0]}]`;
@@ -576,11 +578,12 @@ export async function startBot() {
             
             for (const user of config.data.users) {
                 try {
-                    // Wrap checks in a timeout (e.g. 60 seconds per user) to prevent hanging
+                    // Wrap checks in a timeout (e.g. 120 seconds per user) to prevent hanging
+                    // Increased timeout to accommodate message queue delays
                     await withTimeout((async () => {
                         await checkLiveStatus(user);
                         await checkDynamics(user);
-                    })(), 60000);
+                    })(), 120000);
 
                     // Add a small delay between users to avoid rate limiting
                     await new Promise(resolve => setTimeout(resolve, 2000));
