@@ -79,7 +79,7 @@
         .type-live_start { color: #52c41a; font-weight: 500; }
         .type-live_end { color: #fa8c16; font-weight: 500; }
         .type-dynamic { color: #1890ff; font-weight: 500; }
-        .type-delivery { color: #722ed1; font-weight: 500; }
+        .type-delivery_report { color: #722ed1; font-weight: 500; }
         
         .badge {
             display: inline-block;
@@ -157,7 +157,7 @@
                             ${log.details.isRetry ? '<span class="badge" style="background:#fffbe6; color:#fa8c16">补发</span>' : ''}
                         `;
                     } else if (log.type === 'delivery_report') {
-                        typeLabel = '发送报告';
+                        typeLabel = '推送';
                         
                         const results = log.details.results || [];
                         const badges = results.map(r => {
