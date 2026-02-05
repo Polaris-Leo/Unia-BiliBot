@@ -128,6 +128,9 @@ async function checkLiveStatus(user) {
                         msgType: msgType
                     });
 
+                    
+                    let sendResults = [];
+
                     const sendToTarget = async (target, type) => {
                         const isObj = typeof target === 'object';
                         const config = isObj ? target : { id: target };
@@ -166,8 +169,10 @@ async function checkLiveStatus(user) {
                             } else {
                                 await napcat.sendPrivateMsg(config.id, msg);
                             }
+                            sendResults.push(`${type}:${config.id}(OK)`);
                         } catch (e) {
                             console.error(`Failed to send live start notification to ${type} ${config.id}:`, e.message);
+                            sendResults.push(`${type}:${config.id}(Fail)`);
                         }
                     };
 
@@ -178,6 +183,13 @@ async function checkLiveStatus(user) {
                         for (const userId of user.targetPrivate) {
                             await sendToTarget(userId, 'private');
                         }
+                    }
+
+                    if (sendResults.length > 0) {
+                        logger.logEvent('delivery_report', user, {
+                            msgType: 'live_start',
+                            results: sendResults
+                        });
                     }
                 }
             }
@@ -368,6 +380,7 @@ async function checkDynamics(user) {
             });
 
             let sendSuccess = false;
+            let sendResults = [];
             
             const sendToTarget = async (target, type) => {
                 const isObj = typeof target === 'object';
@@ -406,7 +419,7 @@ async function checkDynamics(user) {
                     if (!wantsHistory) return;
                 }
 
-                console.log(`[Bot] Sending dynamic msg for ${author} to ${type} ${config.id}`);
+                console.log(`[Bot] Sending dynamic msg for ${variables.name} to ${type} ${config.id}`);
 
                 try {
                     if (type === 'group') {
@@ -415,8 +428,10 @@ async function checkDynamics(user) {
                         await napcat.sendPrivateMsg(config.id, msg);
                     }
                     sendSuccess = true;
+                    sendResults.push(`${type}:${config.id}(OK)`);
                 } catch (e) {
                     console.error(`Failed to send dynamic to ${type} ${config.id}:`, e.message);
+                    sendResults.push(`${type}:${config.id}(Fail)`);
                 }
             };
             
@@ -430,6 +445,15 @@ async function checkDynamics(user) {
                 for (const userId of user.targetPrivate) {
                    await sendToTarget(userId, 'private');
                 }
+            }
+
+            // Log the delivery report
+            if (sendResults.length > 0) {
+                logger.logEvent('delivery_report', user, {
+                    relatedId: item.id_str,
+                    msgType: 'dynamic',
+                    results: sendResults
+                });
             }
 
             // Only update lastDynamicId if at least one message was sent successfully
