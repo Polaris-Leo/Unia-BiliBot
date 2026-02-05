@@ -65,25 +65,37 @@ async function processQueue() {
     if (isQueueProcessing) return;
     isQueueProcessing = true;
 
-    while (msgQueue.length > 0) {
-        const { task, resolve, reject } = msgQueue.shift();
-        try {
-            await task();
-            resolve();
-        } catch (e) {
-            reject(e);
+    try {
+        while (msgQueue.length > 0) {
+            const { task, resolve, reject, type, targetId } = msgQueue.shift();
+            try {
+                // Add a timeout for the task itself to prevent queue stalling
+                await Promise.race([
+                    task(),
+                    new Promise((_, r) => setTimeout(() => r(new Error('Task timed out')), 10000))
+                ]);
+                console.log(`[NapCat] Sent message to ${type} ${targetId}`);
+                resolve();
+            } catch (e) {
+                console.error(`[NapCat] Failed to send to ${type} ${targetId}:`, e.message);
+                reject(e);
+            }
+            // Wait before processing next
+            if (msgQueue.length > 0) {
+                await new Promise(r => setTimeout(r, RATE_LIMIT_DELAY));
+            }
         }
-        // Wait before processing next
-        if (msgQueue.length > 0) {
-            await new Promise(r => setTimeout(r, RATE_LIMIT_DELAY));
-        }
+    } catch (criticalError) {
+        console.error('[NapCat] Critical queue error:', criticalError);
+    } finally {
+        isQueueProcessing = false;
     }
-    isQueueProcessing = false;
 }
 
-function enqueue(task) {
+function enqueue(task, type, targetId) {
     return new Promise((resolve, reject) => {
-        msgQueue.push({ task, resolve, reject });
+        msgQueue.push({ task, resolve, reject, type, targetId });
+        console.log(`[NapCat] Enqueued message for ${type} ${targetId}. Queue size: ${msgQueue.length}`);
         processQueue();
     });
 }
@@ -151,7 +163,7 @@ export async function sendGroupMsg(group_id, message) {
             console.error(`Failed to send group message to ${group_id} (HTTP):`, error.message);
             throw error; // Re-throw to let caller know it failed
         }
-    });
+    }, 'group', group_id);
 }
 
 export async function sendPrivateMsg(user_id, message) {
@@ -175,5 +187,5 @@ export async function sendPrivateMsg(user_id, message) {
             console.error(`Failed to send private message to ${user_id} (HTTP):`, error.message);
             throw error; // Re-throw to let caller know it failed
         }
-    });
+    }, 'private', user_id);
 }

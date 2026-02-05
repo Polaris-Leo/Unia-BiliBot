@@ -158,6 +158,8 @@ async function checkLiveStatus(user) {
                             msg = `[CQ:at,qq=all]\n${msg}`;
                         }
 
+                        console.log(`[Bot] Sending live start msg for ${liveInfo.uname} to ${type} ${config.id}`);
+
                         try {
                             if (type === 'group') {
                                 await napcat.sendGroupMsg(config.id, msg);
@@ -403,6 +405,8 @@ async function checkDynamics(user) {
                     const wantsHistory = config.monitorHistory !== undefined ? config.monitorHistory : user.notifyMissed;
                     if (!wantsHistory) return;
                 }
+
+                console.log(`[Bot] Sending dynamic msg for ${author} to ${type} ${config.id}`);
 
                 try {
                     if (type === 'group') {
