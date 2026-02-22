@@ -72,15 +72,9 @@ async function checkLiveStatus(user) {
 
             user.isLive = true;
             
-            if (msgType === 'start') {
-                // New session: Use Bilibili's live_time if available (seconds -> ms), otherwise fallback to now
-                user.lastLiveStart = (liveInfo.live_time && liveInfo.live_time > 0) ? liveInfo.live_time * 1000 : now;
-            } else {
-                // Resume session: Keep existing lastLiveStart if available
-                if (!user.lastLiveStart) {
-                     user.lastLiveStart = (liveInfo.live_time && liveInfo.live_time > 0) ? liveInfo.live_time * 1000 : now;
-                }
-            }
+            // Always update lastLiveStart to the latest live_time from API (or now)
+            // This prevents the "stale session" check from infinitely looping during a resume
+            user.lastLiveStart = (liveInfo.live_time && liveInfo.live_time > 0) ? liveInfo.live_time * 1000 : now;
 
             user.offlineSince = 0;
             
