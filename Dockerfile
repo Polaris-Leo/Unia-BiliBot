@@ -1,43 +1,34 @@
-FROM node:18-alpine
+FROM node:22-alpine
 
-# 安装 Chromium 和中文字体
-# 1. 替换为国内源（阿里云）以提高下载速度和稳定性
-# 2. 安装 Chromium 和文泉驿微米黑字体
+# Chromium 会自动拉取 nss、freetype、harfbuzz 等运行依赖。
+# 保留完整字体组合，确保中文、各语种文本和 Emoji 的渲染兼容性。
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories \
-    && apk update \
     && apk add --no-cache \
       chromium \
-      nss \
-      freetype \
-      harfbuzz \
       ca-certificates \
       font-wqy-zenhei \
       font-noto \
       font-noto-cjk \
       font-noto-emoji \
-      ttf-dejavu
+      ttf-dejavu \
+    && fc-cache -f
 
-# 设置环境变量
-# 1. 跳过 Puppeteer 下载自带的 Chromium (节省 ~170MB)
-# 2. 指定使用系统安装的 Chromium
+# 使用系统 Chromium，禁止 Puppeteer 再下载一份浏览器。
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
+    NODE_ENV=production
 
 WORKDIR /app
 
 COPY package*.json ./
 
-# 安装依赖
-RUN npm install --production
+RUN npm ci --omit=dev \
+    && npm cache clean --force
 
-# 刷新字体缓存，确保新安装的字体被系统识别
-# 这对于解决字体回退问题至关重要
-RUN fc-cache -f -v
-
-COPY . .
-
-RUN mkdir -p data
+COPY src ./src
+COPY public ./public
+RUN mkdir /app/data
 
 EXPOSE 3002
 
-CMD ["npm", "start"]
+CMD ["node", "src/index.js"]

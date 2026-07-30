@@ -1,8 +1,8 @@
-node_modules
-npm-debug.log
-Dockerfile
-.dockerignore
-.git
-.gitignore
-README.md
-test-*.js
+# Docker 构建只需要 package*.json、src/ 和 public/。
+*
+!package.json
+!package-lock.json
+!src/
+!src/**
+!public/
+!public/**
