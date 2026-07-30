@@ -31,6 +31,7 @@ async function checkLiveStatus(user) {
             console.log(`[Startup] ${user.uname} state mismatch: Memory=Live, API=Offline. Silently correcting to Offline.`);
             user.isLive = false;
             user.offlineSince = 0;
+            user.lastLiveEnd = now; // Update lastLiveEnd to now to allow resume detection
             config.save();
             // Don't return, let it fall through to ensure clean state
         }
@@ -48,6 +49,8 @@ async function checkLiveStatus(user) {
             if (apiLiveStart > user.lastLiveStart + 2 * 60 * 1000) {
                 console.log(`[${new Date().toLocaleString()}] Detected stale session for ${liveInfo.uname}. Resetting status to trigger notification.`);
                 user.isLive = false;
+                user.lastLiveEnd = apiLiveStart - 1000;
+                user.offlineSince = 0;
             }
         }
 
