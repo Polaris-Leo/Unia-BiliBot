@@ -5,8 +5,7 @@ import * as logger from './logger.js';
 import { generateDynamicCard } from './image-generator.js';
 
 const POLL_INTERVAL = 30 * 1000; // Increased to 60 seconds for performance
-const retryMap = new Map(); // mid -> Map<dynamicId, retryCount>
-const MAX_RETRIES = 3;
+const MAX_DELIVERY_RETRY_DELAY = 10 * 60 * 1000;
 let isFirstRun = true;
 
 function formatMessage(template, variables) {
@@ -340,36 +339,24 @@ async function checkDynamics(user) {
     for (let i = newItems.length - 1; i >= 0; i--) {
         const item = newItems[i];
         
-        // Check if it's a retry
-        let isRetry = false;
-        let retryCount = 0;
-        
-        if (!retryMap.has(user.mid)) {
-            retryMap.set(user.mid, new Map());
-        }
-        const userRetryMap = retryMap.get(user.mid);
+        user.dynamicDeliveryState ||= {};
+        const deliveryState = user.dynamicDeliveryState[item.id_str] ||= {
+            deliveredTargets: [],
+            retryCount: 0,
+            nextRetryAt: 0
+        };
+        const deliveredTargets = new Set(deliveryState.deliveredTargets);
+        const isRetry = deliveryState.retryCount > 0;
 
-        if (userRetryMap.has(item.id_str)) {
-            isRetry = true;
-            retryCount = userRetryMap.get(item.id_str);
-        }
-
-        if (retryCount >= MAX_RETRIES) {
-            console.warn(`Dynamic ${item.id_str} failed ${retryCount} times. Skipping.`);
-            user.lastDynamicId = item.id_str; // Skip this one
-            config.save();
-            userRetryMap.delete(item.id_str);
-            continue;
+        if (deliveryState.nextRetryAt > Date.now()) {
+            console.log(`Dynamic ${item.id_str} retry deferred until ${new Date(deliveryState.nextRetryAt).toLocaleString()}.`);
+            break;
         }
 
         // Render the card and build target-independent variables exactly once per dynamic.
         const payload = await prepareDynamicPayload(item);
         let defaultMsg = buildDynamicMessage(item, user, payload);
         const { variables } = payload;
-
-        if (isRetry) {
-             defaultMsg = '<补发>\n' + defaultMsg;
-        }
 
         if (defaultMsg) {
             logger.logEvent('dynamic', user, {
@@ -378,17 +365,28 @@ async function checkDynamics(user) {
                 isRetry
             });
 
-            let sendSuccess = false;
             let sendResults = [];
             let targetCount = 0;
             let templateOverrideTargetCount = 0;
+            let failedTargetCount = 0;
 
             const sendToTarget = async (target, type) => {
                 const isObj = typeof target === 'object';
                 const targetConfig = isObj ? target : { id: target };
 
                 if (targetConfig.monitorDynamic === false) return;
+
+                if (isHistory) {
+                    const wantsHistory = targetConfig.monitorHistory !== undefined ? targetConfig.monitorHistory : user.notifyMissed;
+                    if (!wantsHistory) return;
+                }
+
+                const targetKey = `${type}:${targetConfig.id}`;
                 targetCount++;
+                if (deliveredTargets.has(targetKey)) {
+                    sendResults.push(`${targetKey}(AlreadySent)`);
+                    return;
+                }
 
                 const hasTemplateOverride = Boolean(
                     targetConfig.dynamicMsg ||
@@ -413,12 +411,6 @@ async function checkDynamics(user) {
                     msg = `[CQ:at,qq=all]\n${msg}`;
                 }
 
-                // History filter
-                if (isHistory) {
-                    const wantsHistory = targetConfig.monitorHistory !== undefined ? targetConfig.monitorHistory : user.notifyMissed;
-                    if (!wantsHistory) return;
-                }
-
                 console.log(`[Bot] Sending dynamic msg for ${variables.name} to ${type} ${targetConfig.id}`);
 
                 try {
@@ -427,10 +419,13 @@ async function checkDynamics(user) {
                     } else {
                         await napcat.sendPrivateMsg(targetConfig.id, msg);
                     }
-                    sendSuccess = true;
+                    deliveredTargets.add(targetKey);
+                    deliveryState.deliveredTargets = [...deliveredTargets];
+                    config.save();
                     sendResults.push(`${type}:${targetConfig.id}(OK)`);
                 } catch (e) {
                     console.error(`Failed to send dynamic to ${type} ${targetConfig.id}:`, e.message);
+                    failedTargetCount++;
                     sendResults.push(`${type}:${targetConfig.id}(Fail)`);
                 }
             };
@@ -464,19 +459,24 @@ async function checkDynamics(user) {
                 usedImageFallback: payload.usedImageFallback
             });
 
-            // Only update lastDynamicId if at least one message was sent successfully
-            // If all failed (e.g. network error), we don't update, so it will retry next time
-            if (sendSuccess) {
+            // Advance only after every eligible target has been delivered.
+            if (failedTargetCount === 0) {
                 user.lastDynamicId = item.id_str;
-                config.save(); // Save immediately to prevent duplicate sends on crash/reload
-                // Remove from retryMap
-                userRetryMap.delete(item.id_str);
+                delete user.dynamicDeliveryState[item.id_str];
+                config.save();
             } else {
-                console.warn(`Failed to send dynamic ${item.id_str} to any target, will retry next time.`);
-                // Increment retry count
-                userRetryMap.set(item.id_str, retryCount + 1);
-                
-                // Stop processing newer items to maintain order
+                deliveryState.retryCount++;
+                const retryDelay = Math.min(
+                    POLL_INTERVAL * (2 ** Math.min(deliveryState.retryCount - 1, 5)),
+                    MAX_DELIVERY_RETRY_DELAY
+                );
+                deliveryState.nextRetryAt = Date.now() + retryDelay;
+                deliveryState.deliveredTargets = [...deliveredTargets];
+                config.save();
+                console.warn(
+                    `Dynamic ${item.id_str} failed for ${failedTargetCount} target(s); ` +
+                    `successful targets will be skipped on retry in ${Math.round(retryDelay / 1000)}s.`
+                );
                 break;
             }
         }
@@ -525,8 +525,8 @@ async function prepareDynamicPayload(item) {
     let usedImageFallback = false;
 
     try {
-        // If server is slow, this fails fast and falls back to simple mode.
-        const imageBuffer = await withTimeout(generateDynamicCard(item), 120000);
+        // The renderer owns its timeout and closes the page on expiry.
+        const imageBuffer = await generateDynamicCard(item);
         const base64 = imageBuffer.toString('base64');
         imageCQ = `[CQ:image,file=base64://${base64}]`;
     } catch (error) {
@@ -579,24 +579,6 @@ function formatDuration(ms) {
     return `${h}小时${m}分${s}秒`;
 }
 
-function withTimeout(promise, ms) {
-    return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-            reject(new Error('Operation timed out'));
-        }, ms);
-        
-        promise
-            .then(value => {
-                clearTimeout(timer);
-                resolve(value);
-            })
-            .catch(reason => {
-                clearTimeout(timer);
-                reject(reason);
-            });
-    });
-}
-
 export async function startBot() {
     console.log('Bot started...');
     
@@ -616,12 +598,8 @@ export async function startBot() {
             
             for (const user of config.data.users) {
                 try {
-                    // Wrap checks in a timeout (e.g. 120 seconds per user) to prevent hanging
-                    // Increased timeout to accommodate message queue delays
-                    await withTimeout((async () => {
-                        await checkLiveStatus(user);
-                        await checkDynamics(user);
-                    })(), 120000);
+                    await checkLiveStatus(user);
+                    await checkDynamics(user);
 
                     // Add a small delay between users to avoid rate limiting
                     await new Promise(resolve => setTimeout(resolve, 2000));

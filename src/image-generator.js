@@ -5,6 +5,23 @@ import path from 'path';
 let browser = null;
 let browserIdleTimer = null;
 const BROWSER_IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+const RENDER_TIMEOUT = 90 * 1000;
+let renderQueueTail = Promise.resolve();
+
+async function withRenderLock(task) {
+    const previous = renderQueueTail;
+    let release;
+    renderQueueTail = new Promise(resolve => {
+        release = resolve;
+    });
+
+    await previous;
+    try {
+        return await task();
+    } finally {
+        release();
+    }
+}
 
 function isBrowserFatalError(error) {
     const message = error?.message || '';
@@ -349,6 +366,8 @@ function generateHtml(item) {
             border-radius: 8px;
             padding: 20px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            max-height: 1400px;
+            overflow: hidden;
         }
         .header {
             display: flex;
@@ -417,6 +436,9 @@ function generateHtml(item) {
         .img-item-single {
             width: 100%;
             height: auto;
+            max-height: 720px;
+            object-fit: contain;
+            object-position: top center;
             border-radius: 4px;
             display: block;
         }
@@ -503,8 +525,10 @@ function generateHtml(item) {
     `;
 }
 
-export async function generateDynamicCard(item) {
+async function renderDynamicCard(item) {
     let page = null;
+    let renderTimeout = null;
+    let timedOut = false;
     const startedAt = Date.now();
     const timings = {};
     let reusedBrowser = false;
@@ -515,12 +539,18 @@ export async function generateDynamicCard(item) {
         const pageStartedAt = Date.now();
         page = await browserInstance.newPage();
         timings.newPage = Date.now() - pageStartedAt;
+        renderTimeout = setTimeout(() => {
+            timedOut = true;
+            if (page && !page.isClosed()) {
+                page.close().catch(() => {});
+            }
+        }, RENDER_TIMEOUT);
 
         const viewportStartedAt = Date.now();
         await page.setViewport({
             width: 600,
             height: 800,
-            deviceScaleFactor: 3
+            deviceScaleFactor: 2
         });
         timings.setViewport = Date.now() - viewportStartedAt;
 
@@ -544,8 +574,9 @@ export async function generateDynamicCard(item) {
 
         const screenshotStartedAt = Date.now();
         const buffer = await element.screenshot({
-            type: 'png',
-            omitBackground: true
+            type: 'webp',
+            quality: 88,
+            omitBackground: false
         });
         timings.screenshot = Date.now() - screenshotStartedAt;
         timings.total = Date.now() - startedAt;
@@ -561,6 +592,9 @@ export async function generateDynamicCard(item) {
         scheduleBrowserCleanup();
         return buffer;
     } catch (error) {
+        if (timedOut) {
+            error = new Error(`Card render timed out after ${RENDER_TIMEOUT / 1000}s`);
+        }
         timings.total = Date.now() - startedAt;
         console.error('[Card render failed]', JSON.stringify({
             dynamicId: item.id_str,
@@ -582,6 +616,7 @@ export async function generateDynamicCard(item) {
         }
         throw error;
     } finally {
+        if (renderTimeout) clearTimeout(renderTimeout);
         if (page) {
             try {
                 await page.close();
@@ -590,6 +625,10 @@ export async function generateDynamicCard(item) {
             }
         }
     }
+}
+
+export async function generateDynamicCard(item) {
+    return withRenderLock(() => renderDynamicCard(item));
 }
 
 export async function closeBrowser() {

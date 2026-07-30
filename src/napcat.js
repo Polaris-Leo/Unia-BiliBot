@@ -5,6 +5,9 @@ import { config } from './config.js';
 let ws = null;
 let isConnected = false;
 let reconnectTimer = null;
+let echoSequence = 0;
+const pendingWsRequests = new Map();
+const REQUEST_TIMEOUT = 15000;
 
 export function init() {
     connectWs();
@@ -14,6 +17,7 @@ function connectWs() {
     if (!config.data.napcatWsUrl) return;
 
     if (ws) {
+        rejectPendingWsRequests(new Error('NapCat WS connection reloading'));
         ws.removeAllListeners();
         ws.close();
     }
@@ -40,6 +44,7 @@ function connectWs() {
     ws.on('close', () => {
         console.log('NapCat WS closed');
         isConnected = false;
+        rejectPendingWsRequests(new Error('NapCat WS disconnected'));
         scheduleReconnect();
     });
 
@@ -50,16 +55,39 @@ function connectWs() {
     });
     
     ws.on('message', (data) => {
-        // Handle incoming messages if needed in the future
-        // const msg = JSON.parse(data);
-        // console.log('Received WS message:', msg);
+        let message;
+        try {
+            message = JSON.parse(data.toString());
+        } catch {
+            return;
+        }
+
+        if (message.echo === undefined || message.echo === null) return;
+        const pending = pendingWsRequests.get(String(message.echo));
+        if (!pending) return;
+
+        pendingWsRequests.delete(String(message.echo));
+        clearTimeout(pending.timer);
+        if (message.status === 'ok' && (message.retcode === 0 || message.retcode === undefined)) {
+            pending.resolve(message.data);
+        } else {
+            pending.reject(new Error(message.message || message.wording || `NapCat retcode ${message.retcode}`));
+        }
     });
+}
+
+function rejectPendingWsRequests(error) {
+    for (const pending of pendingWsRequests.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(error);
+    }
+    pendingWsRequests.clear();
 }
 
 // Simple Request Queue to prevent rate limiting / message swallowing
 const msgQueue = [];
 let isQueueProcessing = false;
-const RATE_LIMIT_DELAY = 2000; // 2 seconds between messages
+const RATE_LIMIT_DELAY = 750;
 
 async function processQueue() {
     if (isQueueProcessing) return;
@@ -69,11 +97,7 @@ async function processQueue() {
         while (msgQueue.length > 0) {
             const { task, resolve, reject, type, targetId } = msgQueue.shift();
             try {
-                // Add a timeout for the task itself to prevent queue stalling
-                await Promise.race([
-                    task(),
-                    new Promise((_, r) => setTimeout(() => r(new Error('Task timed out')), 10000))
-                ]);
+                await task();
                 console.log(`[NapCat] Sent message to ${type} ${targetId}`);
                 resolve();
             } catch (e) {
@@ -115,20 +139,31 @@ export function reload() {
 
 async function sendWs(action, params) {
     return new Promise((resolve, reject) => {
-        if (!isConnected || !ws) {
+        if (!isConnected || !ws || ws.readyState !== WebSocket.OPEN) {
             reject(new Error('WS not connected'));
             return;
         }
-        
+
+        const echo = `${Date.now()}-${++echoSequence}`;
         const payload = {
             action,
             params,
-            echo: Date.now().toString()
+            echo
         };
-        
+
+        const timer = setTimeout(() => {
+            pendingWsRequests.delete(echo);
+            reject(new Error(`NapCat WS request timed out after ${REQUEST_TIMEOUT / 1000}s`));
+        }, REQUEST_TIMEOUT);
+        pendingWsRequests.set(echo, { resolve, reject, timer });
+
         ws.send(JSON.stringify(payload), (err) => {
-            if (err) reject(err);
-            else resolve();
+            if (!err) return;
+            const pending = pendingWsRequests.get(echo);
+            if (!pending) return;
+            pendingWsRequests.delete(echo);
+            clearTimeout(timer);
+            reject(err);
         });
     });
 }
@@ -139,7 +174,15 @@ async function sendHttp(action, params) {
     if (config.data.napcatToken) {
         headers['Authorization'] = `Bearer ${config.data.napcatToken}`;
     }
-    await axios.post(url, params, { headers });
+    const response = await axios.post(url, params, {
+        headers,
+        timeout: REQUEST_TIMEOUT
+    });
+    if (response.data?.status !== 'ok' ||
+        (response.data?.retcode !== 0 && response.data?.retcode !== undefined)) {
+        throw new Error(response.data?.message || response.data?.wording ||
+            `NapCat HTTP retcode ${response.data?.retcode}`);
+    }
 }
 
 export async function sendGroupMsg(group_id, message) {
