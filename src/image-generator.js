@@ -6,6 +6,73 @@ let browser = null;
 let browserIdleTimer = null;
 const BROWSER_IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
+function isBrowserFatalError(error) {
+    const message = error?.message || '';
+    return !browser?.isConnected() || /target closed|session closed|browser has disconnected|connection closed|protocol error|target crashed|browser was not found|failed to launch/i.test(message);
+}
+
+async function waitForCardResources(page) {
+    await page.evaluate(async () => {
+        const timeoutMs = 20000;
+        const withTimeout = (promise, label) => new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error(`Timed out waiting for ${label}`)), timeoutMs);
+            promise.then(value => {
+                clearTimeout(timer);
+                resolve(value);
+            }, error => {
+                clearTimeout(timer);
+                reject(error);
+            });
+        });
+
+        const loadImage = async (image, label) => {
+            if (!image.complete) {
+                await withTimeout(new Promise((resolve, reject) => {
+                    image.addEventListener('load', resolve, { once: true });
+                    image.addEventListener('error', () => reject(new Error(`Failed to load ${label}`)), { once: true });
+                }), label);
+            }
+            if (!image.naturalWidth || !image.naturalHeight) {
+                throw new Error(`Invalid image dimensions for ${label}`);
+            }
+            if (typeof image.decode === 'function') {
+                await withTimeout(image.decode(), label);
+            }
+        };
+
+        const timings = {};
+        let phaseStartedAt = performance.now();
+        await withTimeout(document.fonts.ready, 'fonts');
+        timings.fontsReady = Math.round(performance.now() - phaseStartedAt);
+
+        phaseStartedAt = performance.now();
+        const imageElements = [...document.images];
+        await Promise.all(imageElements.map((image, index) => loadImage(image, `img #${index + 1}`)));
+        timings.imagesReady = Math.round(performance.now() - phaseStartedAt);
+
+        phaseStartedAt = performance.now();
+        const backgroundUrls = [...document.querySelectorAll('*')]
+            .flatMap(element => {
+                const background = getComputedStyle(element).backgroundImage;
+                return [...background.matchAll(/url\(["']?(.*?)["']?\)/g)].map(match => match[1]);
+            })
+            .filter(Boolean);
+
+        await Promise.all([...new Set(backgroundUrls)].map((url, index) => {
+            const image = new Image();
+            image.src = url;
+            return loadImage(image, `background #${index + 1}`);
+        }));
+        timings.backgroundsReady = Math.round(performance.now() - phaseStartedAt);
+
+        phaseStartedAt = performance.now();
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        timings.paintReady = Math.round(performance.now() - phaseStartedAt);
+
+        return timings;
+    });
+}
+
 async function getBrowser() {
     // Clear idle timer if it exists
     if (browserIdleTimer) {
@@ -438,50 +505,78 @@ function generateHtml(item) {
 
 export async function generateDynamicCard(item) {
     let page = null;
+    const startedAt = Date.now();
+    const timings = {};
+    let reusedBrowser = false;
+
     try {
-        const browser = await getBrowser();
-        page = await browser.newPage();
-    
-        // Set viewport with high pixel density for better quality
+        reusedBrowser = Boolean(browser?.isConnected());
+        const browserInstance = await getBrowser();
+        const pageStartedAt = Date.now();
+        page = await browserInstance.newPage();
+        timings.newPage = Date.now() - pageStartedAt;
+
+        const viewportStartedAt = Date.now();
         await page.setViewport({
             width: 600,
             height: 800,
             deviceScaleFactor: 3
         });
-        
+        timings.setViewport = Date.now() - viewportStartedAt;
+
         const html = generateHtml(item);
-        // Set a timeout for content loading to prevent hanging indefinitely
-        await page.setContent(html, { 
-            waitUntil: 'networkidle0',
-            timeout: 30000 // 30 seconds timeout
+        const contentStartedAt = Date.now();
+        await page.setContent(html, {
+            waitUntil: 'domcontentloaded',
+            timeout: 10000
         });
-        
-        // Get the height of the card
+        timings.setContent = Date.now() - contentStartedAt;
+
+        const resourcesStartedAt = Date.now();
+        const resourceTimings = await waitForCardResources(page);
+        timings.resourcesReady = Date.now() - resourcesStartedAt;
+        Object.assign(timings, resourceTimings);
+
         const element = await page.$('#card');
         if (!element) {
             throw new Error('Card element not found');
         }
-        
-        // Screenshot just the card
+
+        const screenshotStartedAt = Date.now();
         const buffer = await element.screenshot({
             type: 'png',
             omitBackground: true
         });
-        
-        // Schedule cleanup after successful generation
+        timings.screenshot = Date.now() - screenshotStartedAt;
+        timings.total = Date.now() - startedAt;
+
+        console.log('[Card render performance]', JSON.stringify({
+            dynamicId: item.id_str,
+            type: item.type,
+            hasForward: item.type === 'DYNAMIC_TYPE_FORWARD',
+            reusedBrowser,
+            ...timings
+        }));
+
         scheduleBrowserCleanup();
-        
         return buffer;
     } catch (error) {
-        console.error('Error in generateDynamicCard:', error);
-        // If we hit a protocol error or timeout, the browser might be in a bad state.
-        // Close it so it gets recreated next time.
-        if (browser) {
-            console.log('Closing browser due to error to recover memory/state...');
+        timings.total = Date.now() - startedAt;
+        console.error('[Card render failed]', JSON.stringify({
+            dynamicId: item.id_str,
+            type: item.type,
+            reusedBrowser,
+            ...timings,
+            error: error.message,
+            browserFatal: isBrowserFatalError(error)
+        }));
+
+        if (isBrowserFatalError(error) && browser) {
+            console.log('Closing browser after fatal browser error...');
             try {
                 await browser.close();
-            } catch (e) {
-                console.error('Error closing browser on failure:', e);
+            } catch (closeError) {
+                console.error('Error closing browser on failure:', closeError);
             }
             browser = null;
         }
@@ -490,8 +585,8 @@ export async function generateDynamicCard(item) {
         if (page) {
             try {
                 await page.close();
-            } catch (e) {
-                console.error('Error closing page:', e);
+            } catch (error) {
+                console.error('Error closing page:', error);
             }
         }
     }

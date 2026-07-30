@@ -362,9 +362,11 @@ async function checkDynamics(user) {
             continue;
         }
 
-        // We get the variables and fallback message
-        let { msg: defaultMsg, variables } = await parseDynamic(item, user); 
-        
+        // Render the card and build target-independent variables exactly once per dynamic.
+        const payload = await prepareDynamicPayload(item);
+        let defaultMsg = buildDynamicMessage(item, user, payload);
+        const { variables } = payload;
+
         if (isRetry) {
              defaultMsg = '<补发>\n' + defaultMsg;
         }
@@ -378,32 +380,33 @@ async function checkDynamics(user) {
 
             let sendSuccess = false;
             let sendResults = [];
-            
+            let targetCount = 0;
+            let templateOverrideTargetCount = 0;
+
             const sendToTarget = async (target, type) => {
                 const isObj = typeof target === 'object';
-                const config = isObj ? target : { id: target };
-                
-                if (config.monitorDynamic === false) return;
+                const targetConfig = isObj ? target : { id: target };
 
-                // Determine Msg
-                let msg = defaultMsg;
-                // Check detailed override (e.g. video vs article)
-                // This is getting complex because parseDynamic handled fallback logic based on type.
-                // We should probably allow `parseDynamic` to take an override config.
-                // Or simplification: Just check `dynamicMsg` override on target.
-                // If user wants specific video/article overrides per group, that's very detailed. 
-                // Let's assume `dynamicMsg` is the main override for now, or re-parse.
-                
-                // Let's re-parse if we detect any override key in config
-                if (config.dynamicMsg || config.dynamicMsg_forward || config.dynamicMsg_video || config.dynamicMsg_article) {
-                     const res = await parseDynamic(item, config); // Pass config as "user" context to use its templates
-                     msg = res.msg;
-                     if (isRetry) msg = '<补发>\n' + msg;
-                }
+                if (targetConfig.monitorDynamic === false) return;
+                targetCount++;
+
+                const hasTemplateOverride = Boolean(
+                    targetConfig.dynamicMsg ||
+                    targetConfig.dynamicMsg_forward ||
+                    targetConfig.dynamicMsg_video ||
+                    targetConfig.dynamicMsg_article
+                );
+                if (hasTemplateOverride) templateOverrideTargetCount++;
+
+                // Target overrides only change message text. Reuse the already-rendered card.
+                let msg = hasTemplateOverride
+                    ? buildDynamicMessage(item, targetConfig, payload)
+                    : defaultMsg;
+                if (isRetry) msg = '<补发>\n' + msg;
 
                 let atAll = false;
                 if (type === 'group') {
-                    atAll = isObj ? (config.atAllDynamic) : user.atAllDynamic;
+                    atAll = isObj ? (targetConfig.atAllDynamic) : user.atAllDynamic;
                 }
 
                 if (atAll) {
@@ -412,23 +415,23 @@ async function checkDynamics(user) {
 
                 // History filter
                 if (isHistory) {
-                    const wantsHistory = config.monitorHistory !== undefined ? config.monitorHistory : user.notifyMissed;
+                    const wantsHistory = targetConfig.monitorHistory !== undefined ? targetConfig.monitorHistory : user.notifyMissed;
                     if (!wantsHistory) return;
                 }
 
-                console.log(`[Bot] Sending dynamic msg for ${variables.name} to ${type} ${config.id}`);
+                console.log(`[Bot] Sending dynamic msg for ${variables.name} to ${type} ${targetConfig.id}`);
 
                 try {
                     if (type === 'group') {
-                        await napcat.sendGroupMsg(config.id, msg);
+                        await napcat.sendGroupMsg(targetConfig.id, msg);
                     } else {
-                        await napcat.sendPrivateMsg(config.id, msg);
+                        await napcat.sendPrivateMsg(targetConfig.id, msg);
                     }
                     sendSuccess = true;
-                    sendResults.push(`${type}:${config.id}(OK)`);
+                    sendResults.push(`${type}:${targetConfig.id}(OK)`);
                 } catch (e) {
-                    console.error(`Failed to send dynamic to ${type} ${config.id}:`, e.message);
-                    sendResults.push(`${type}:${config.id}(Fail)`);
+                    console.error(`Failed to send dynamic to ${type} ${targetConfig.id}:`, e.message);
+                    sendResults.push(`${type}:${targetConfig.id}(Fail)`);
                 }
             };
             
@@ -453,6 +456,14 @@ async function checkDynamics(user) {
                 });
             }
 
+            logger.logEvent('dynamic_performance', user, {
+                id: item.id_str,
+                targetCount,
+                templateOverrideTargetCount,
+                cardRenderCount: 1,
+                usedImageFallback: payload.usedImageFallback
+            });
+
             // Only update lastDynamicId if at least one message was sent successfully
             // If all failed (e.g. network error), we don't update, so it will retry next time
             if (sendSuccess) {
@@ -476,7 +487,7 @@ async function checkDynamics(user) {
     // It is updated incrementally inside the loop upon success
 }
 
-async function parseDynamic(item, user) {
+async function prepareDynamicPayload(item) {
     const author = item.modules.module_author.name;
     const dynamicModule = item.modules.module_dynamic;
     
@@ -510,52 +521,54 @@ async function parseDynamic(item, user) {
         }
     }
 
-    let msg = '';
     let imageCQ = '';
+    let usedImageFallback = false;
 
     try {
-        // Add timeout protection for image generation (60s)
-        // If server is slow, this fails fast and falls back to simple mode
+        // If server is slow, this fails fast and falls back to simple mode.
         const imageBuffer = await withTimeout(generateDynamicCard(item), 120000);
         const base64 = imageBuffer.toString('base64');
         imageCQ = `[CQ:image,file=base64://${base64}]`;
     } catch (error) {
         console.error(`Error generating dynamic card (author: ${author}):`, error.message);
-        // Fallback to first image if generation fails
         if (images.length > 0) {
             imageCQ = `[CQ:image,file=${images[0]}]`;
+            usedImageFallback = true;
         }
     }
 
-    const variables = {
-        name: author,
-        link: jumpUrl,
-        image: imageCQ,
-        action: actionText
+    return {
+        variables: {
+            name: author,
+            link: jumpUrl,
+            image: imageCQ,
+            action: actionText
+        },
+        usedImageFallback
     };
+}
 
-    let template = user.dynamicMsg; // Default template
+function buildDynamicMessage(item, user, payload) {
+    const dynamicModule = item.modules.module_dynamic;
+    const { name, link, image, action } = payload.variables;
+    let template = user.dynamicMsg;
 
-    // Select specific template based on type
     if (item.type === 'DYNAMIC_TYPE_FORWARD' && user.dynamicMsg_forward) {
-         template = user.dynamicMsg_forward;
+        template = user.dynamicMsg_forward;
     } else if (dynamicModule.major) {
         const major = dynamicModule.major;
         if (major.archive && user.dynamicMsg_video) {
-             template = user.dynamicMsg_video;
+            template = user.dynamicMsg_video;
         } else if (major.article && user.dynamicMsg_article) {
-             template = user.dynamicMsg_article;
+            template = user.dynamicMsg_article;
         }
     }
 
     if (template) {
-        msg = formatMessage(template, variables);
-    } else {
-        // Default format
-        msg = `${author} ${actionText}\n${jumpUrl}\n${imageCQ}`;
+        return formatMessage(template, payload.variables);
     }
 
-    return { msg, variables };
+    return `${name} ${action}\n${link}\n${image}`;
 }
 
 function formatDuration(ms) {
